@@ -1,0 +1,12 @@
+[package]
+name = "spacetime-module"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+spacetimedb = {version = "1.1.0", features = ["unstable"]}
+cpal = "0.15.*"
+log = "0.4"
