@@ -1,7 +1,13 @@
+<script setup lang="ts">
+const props = defineProps(['errorMsg'])
+
+</script>
+
 <template>
 	<div class="card">
 		<div class="loader"></div>
 		<h2>Loading...</h2>
+        <p v-if="props.errorMsg">Error: {{ props.errorMsg }}</p>
 	</div>
 </template>
 

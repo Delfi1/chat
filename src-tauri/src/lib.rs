@@ -19,6 +19,34 @@ fn creds_store(addr: String) -> credentials::File {
     credentials::File::new(format!("delfi-chat-{}", addr))
 }
 
+#[derive(Clone, serde::Serialize)]
+pub struct MessagePayload {
+    pub sender: u32,
+    pub sent: i64,
+    pub text: String
+}
+
+impl MessagePayload {
+    pub fn new(message: Message) -> Self {
+        let sent = message.sent.to_micros_since_unix_epoch();
+        Self { sender: message.sender, sent, text: message.text }
+    }
+}
+
+#[derive(Clone, serde::Serialize)]
+pub struct UserPayload {
+    pub id: u32,
+    pub name: String,
+    pub online: bool
+}
+
+impl UserPayload {
+    pub fn new(user: User) -> Self {
+        Self { id: user.id, name: user.name, online: !user.online.is_empty() }
+    }
+}
+
+
 #[derive(Default)]
 struct ConnectionHandler(Option<std::thread::JoinHandle<()>>);
 type ConnectionState = Arc<Mutex<ConnectionHandler>>;
@@ -65,9 +93,7 @@ impl SessionInner {
     pub fn on_user_insert(&mut self, user: &User) {
         let identity = &self.identity.unwrap();
         if user.online.contains(&identity) {
-            self.app.emit("loginned",
-                (user.id, user.name.clone(), !user.online.is_empty())
-            ).expect("Emit error");
+            self.app.emit("loginned", UserPayload::new(user.clone())).expect("Emit error");
         }
 
         self.app.emit("user_inserted", 
@@ -215,7 +241,7 @@ fn count_messages(session: State<SessionState>) -> u64 {
 }
 
 #[tauri::command]
-fn get_messages(session: State<SessionState>, start: usize, end: usize) -> Vec<(u32, i64, String)> {
+fn get_messages(session: State<SessionState>, start: usize, end: usize) -> Vec<MessagePayload> {
     let Some(connection) = &session.lock().unwrap().connection else {
         return vec![];
     };
@@ -224,7 +250,7 @@ fn get_messages(session: State<SessionState>, start: usize, end: usize) -> Vec<(
     messages.sort_by_key(|m| m.sent);
 
     let payload = messages[start..end].to_vec();
-    payload.into_iter().map(|p| (p.sender, p.sent.to_micros_since_unix_epoch(), p.text)).collect()
+    payload.into_iter().map(|m| MessagePayload::new(m)).collect()
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]

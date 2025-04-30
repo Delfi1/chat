@@ -1,20 +1,17 @@
-<script lang="ts">
-export default {
-  data() {
-    return {
-      username: '',
-      password: '',
-      login_page: false,
-    };
-  },
-  methods: {
-    login() {
-      this.$emit('OnLogin', this.username, this.password)
-    },
-    signup() {
-      this.$emit('OnSignup', this.username, this.password)
-    }
-  }
+<script setup lang="ts">
+import { ref } from 'vue';
+
+const emit = defineEmits(['onSignup', 'onLogin']);
+const login_page = ref(false);
+const username = ref('');
+const password = ref('');
+
+function login() {
+    emit('onLogin', username.value, password.value);
+}
+
+function signup() {
+    emit('onSignup', username.value, password.value);
 }
 </script>
 

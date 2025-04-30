@@ -23,6 +23,7 @@ pub struct User {
     #[unique]
     name: String,
     online: Vec<Identity>,
+    // todo: answer
 }
 
 #[table(name=message, public)]
