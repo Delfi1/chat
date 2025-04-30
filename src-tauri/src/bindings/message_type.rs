@@ -7,7 +7,6 @@ use spacetimedb_sdk::__codegen::{self as __sdk, __lib, __sats, __ws};
 #[derive(__lib::ser::Serialize, __lib::de::Deserialize, Clone, PartialEq, Debug)]
 #[sats(crate = __lib)]
 pub struct Message {
-    pub chat: u32,
     pub sender: u32,
     pub sent: __sdk::Timestamp,
     pub text: String,

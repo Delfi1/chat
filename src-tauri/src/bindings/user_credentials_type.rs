@@ -8,8 +8,8 @@ use spacetimedb_sdk::__codegen::{self as __sdk, __lib, __sats, __ws};
 #[sats(crate = __lib)]
 pub struct UserCredentials {
     pub user_id: u32,
-    pub connections: Vec<__sdk::Identity>,
     pub password: String,
+    pub connections: Vec<__sdk::Identity>,
 }
 
 impl __sdk::InModule for UserCredentials {

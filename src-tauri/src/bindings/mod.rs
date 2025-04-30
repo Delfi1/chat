@@ -4,15 +4,8 @@
 #![allow(unused, clippy::all)]
 use spacetimedb_sdk::__codegen::{self as __sdk, __lib, __sats, __ws};
 
-pub mod chat_table;
-pub mod chat_type;
 pub mod credentials_table;
-pub mod identity_connected_reducer;
-pub mod identity_disconnected_reducer;
-pub mod linked_table;
-pub mod linked_user_type;
 pub mod login_reducer;
-pub mod logout_reducer;
 pub mod message_table;
 pub mod message_type;
 pub mod send_message_reducer;
@@ -20,22 +13,9 @@ pub mod signup_reducer;
 pub mod user_credentials_type;
 pub mod user_table;
 pub mod user_type;
-pub mod view_access_type;
-pub mod view_table;
 
-pub use chat_table::*;
-pub use chat_type::Chat;
 pub use credentials_table::*;
-pub use identity_connected_reducer::{
-    identity_connected, set_flags_for_identity_connected, IdentityConnectedCallbackId,
-};
-pub use identity_disconnected_reducer::{
-    identity_disconnected, set_flags_for_identity_disconnected, IdentityDisconnectedCallbackId,
-};
-pub use linked_table::*;
-pub use linked_user_type::LinkedUser;
 pub use login_reducer::{login, set_flags_for_login, LoginCallbackId};
-pub use logout_reducer::{logout, set_flags_for_logout, LogoutCallbackId};
 pub use message_table::*;
 pub use message_type::Message;
 pub use send_message_reducer::{send_message, set_flags_for_send_message, SendMessageCallbackId};
@@ -43,8 +23,6 @@ pub use signup_reducer::{set_flags_for_signup, signup, SignupCallbackId};
 pub use user_credentials_type::UserCredentials;
 pub use user_table::*;
 pub use user_type::User;
-pub use view_access_type::ViewAccess;
-pub use view_table::*;
 
 #[derive(Clone, PartialEq, Debug)]
 
@@ -54,11 +32,8 @@ pub use view_table::*;
 /// to indicate which reducer caused the event.
 
 pub enum Reducer {
-    IdentityConnected,
-    IdentityDisconnected,
     Login { name: String, password: String },
-    Logout,
-    SendMessage { chat: u32, text: String },
+    SendMessage { text: String },
     Signup { name: String, password: String },
 }
 
@@ -69,10 +44,7 @@ impl __sdk::InModule for Reducer {
 impl __sdk::Reducer for Reducer {
     fn reducer_name(&self) -> &'static str {
         match self {
-            Reducer::IdentityConnected => "identity_connected",
-            Reducer::IdentityDisconnected => "identity_disconnected",
             Reducer::Login { .. } => "login",
-            Reducer::Logout => "logout",
             Reducer::SendMessage { .. } => "send_message",
             Reducer::Signup { .. } => "signup",
         }
@@ -82,21 +54,8 @@ impl TryFrom<__ws::ReducerCallInfo<__ws::BsatnFormat>> for Reducer {
     type Error = __sdk::Error;
     fn try_from(value: __ws::ReducerCallInfo<__ws::BsatnFormat>) -> __sdk::Result<Self> {
         match &value.reducer_name[..] {
-            "identity_connected" => Ok(__sdk::parse_reducer_args::<
-                identity_connected_reducer::IdentityConnectedArgs,
-            >("identity_connected", &value.args)?
-            .into()),
-            "identity_disconnected" => Ok(__sdk::parse_reducer_args::<
-                identity_disconnected_reducer::IdentityDisconnectedArgs,
-            >("identity_disconnected", &value.args)?
-            .into()),
             "login" => Ok(__sdk::parse_reducer_args::<login_reducer::LoginArgs>(
                 "login",
-                &value.args,
-            )?
-            .into()),
-            "logout" => Ok(__sdk::parse_reducer_args::<logout_reducer::LogoutArgs>(
-                "logout",
                 &value.args,
             )?
             .into()),
@@ -126,12 +85,9 @@ impl TryFrom<__ws::ReducerCallInfo<__ws::BsatnFormat>> for Reducer {
 #[allow(non_snake_case)]
 #[doc(hidden)]
 pub struct DbUpdate {
-    chat: __sdk::TableUpdate<Chat>,
     credentials: __sdk::TableUpdate<UserCredentials>,
-    linked: __sdk::TableUpdate<LinkedUser>,
     message: __sdk::TableUpdate<Message>,
     user: __sdk::TableUpdate<User>,
-    view: __sdk::TableUpdate<ViewAccess>,
 }
 
 impl TryFrom<__ws::DatabaseUpdate<__ws::BsatnFormat>> for DbUpdate {
@@ -140,14 +96,11 @@ impl TryFrom<__ws::DatabaseUpdate<__ws::BsatnFormat>> for DbUpdate {
         let mut db_update = DbUpdate::default();
         for table_update in raw.tables {
             match &table_update.table_name[..] {
-                "chat" => db_update.chat = chat_table::parse_table_update(table_update)?,
                 "credentials" => {
                     db_update.credentials = credentials_table::parse_table_update(table_update)?
                 }
-                "linked" => db_update.linked = linked_table::parse_table_update(table_update)?,
                 "message" => db_update.message = message_table::parse_table_update(table_update)?,
                 "user" => db_update.user = user_table::parse_table_update(table_update)?,
-                "view" => db_update.view = view_table::parse_table_update(table_update)?,
 
                 unknown => {
                     return Err(__sdk::InternalError::unknown_name(
@@ -174,18 +127,13 @@ impl __sdk::DbUpdate for DbUpdate {
     ) -> AppliedDiff<'_> {
         let mut diff = AppliedDiff::default();
 
-        diff.chat = cache
-            .apply_diff_to_table::<Chat>("chat", &self.chat)
-            .with_updates_by_pk(|row| &row.id);
         diff.credentials = cache
             .apply_diff_to_table::<UserCredentials>("credentials", &self.credentials)
             .with_updates_by_pk(|row| &row.user_id);
-        diff.linked = cache.apply_diff_to_table::<LinkedUser>("linked", &self.linked);
         diff.message = cache.apply_diff_to_table::<Message>("message", &self.message);
         diff.user = cache
             .apply_diff_to_table::<User>("user", &self.user)
             .with_updates_by_pk(|row| &row.id);
-        diff.view = cache.apply_diff_to_table::<ViewAccess>("view", &self.view);
 
         diff
     }
@@ -195,12 +143,9 @@ impl __sdk::DbUpdate for DbUpdate {
 #[allow(non_snake_case)]
 #[doc(hidden)]
 pub struct AppliedDiff<'r> {
-    chat: __sdk::TableAppliedDiff<'r, Chat>,
     credentials: __sdk::TableAppliedDiff<'r, UserCredentials>,
-    linked: __sdk::TableAppliedDiff<'r, LinkedUser>,
     message: __sdk::TableAppliedDiff<'r, Message>,
     user: __sdk::TableAppliedDiff<'r, User>,
-    view: __sdk::TableAppliedDiff<'r, ViewAccess>,
 }
 
 impl __sdk::InModule for AppliedDiff<'_> {
@@ -213,16 +158,13 @@ impl<'r> __sdk::AppliedDiff<'r> for AppliedDiff<'r> {
         event: &EventContext,
         callbacks: &mut __sdk::DbCallbacks<RemoteModule>,
     ) {
-        callbacks.invoke_table_row_callbacks::<Chat>("chat", &self.chat, event);
         callbacks.invoke_table_row_callbacks::<UserCredentials>(
             "credentials",
             &self.credentials,
             event,
         );
-        callbacks.invoke_table_row_callbacks::<LinkedUser>("linked", &self.linked, event);
         callbacks.invoke_table_row_callbacks::<Message>("message", &self.message, event);
         callbacks.invoke_table_row_callbacks::<User>("user", &self.user, event);
-        callbacks.invoke_table_row_callbacks::<ViewAccess>("view", &self.view, event);
     }
 }
 
@@ -798,11 +740,8 @@ impl __sdk::SpacetimeModule for RemoteModule {
     type SubscriptionHandle = SubscriptionHandle;
 
     fn register_tables(client_cache: &mut __sdk::ClientCache<Self>) {
-        chat_table::register_table(client_cache);
         credentials_table::register_table(client_cache);
-        linked_table::register_table(client_cache);
         message_table::register_table(client_cache);
         user_table::register_table(client_cache);
-        view_table::register_table(client_cache);
     }
 }

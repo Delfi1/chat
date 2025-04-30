@@ -19,6 +19,10 @@ fn creds_store(addr: String) -> credentials::File {
     credentials::File::new(format!("delfi-chat-{}", addr))
 }
 
+#[derive(Default)]
+struct ConnectionHandler(Option<std::thread::JoinHandle<()>>);
+type ConnectionState = Arc<Mutex<ConnectionHandler>>;
+
 /// Session handler
 struct SessionInner {
     /// Window events emitter
@@ -38,20 +42,43 @@ impl SessionInner {
         }
     }
 
-    pub fn on_chat_insert(&mut self, chat: &Chat) {
-        println!("Chat inserted: {:?}", chat);
+    pub fn on_connect(&mut self, identity: Identity) {
+        self.identity = Some(identity);
 
-        self.app.emit("chat_inserted", 
-            (chat.id, chat.name.clone(), chat.users.clone())
+        self.app.emit("on_connect", ()).expect("Emit error");
+    }
+
+    pub fn on_connect_error(&mut self, error: String) {
+        self.connection = None;
+        self.identity = None;
+        //println!("Error: {}", error);
+        self.app.emit("on_connect_error", error).expect("Emit error");
+    }
+
+    pub fn on_disconnect(&mut self, error: Option<String>) {
+        self.connection = None;
+        self.identity = None;
+
+        self.app.emit("on_disconnect", error).expect("Emit error");
+    }
+
+    pub fn on_user_insert(&mut self, user: &User) {
+        let identity = &self.identity.unwrap();
+        if user.online.contains(&identity) {
+            self.app.emit("loginned",
+                (user.id, user.name.clone(), !user.online.is_empty())
+            ).expect("Emit error");
+        }
+
+        self.app.emit("user_inserted", 
+            (user.id, user.name.clone(), !user.online.is_empty())
         ).expect("Emit error");
     }
 
     pub fn on_message_insert(&mut self, message: &Message) {
-        println!("Message inserted: {:?}", message);
-
         let sent = message.sent.to_duration_since_unix_epoch().expect("Unexpected");
         self.app.emit("message_inserted", 
-            (message.chat, message.sender, sent, message.text.clone())
+            (message.sender, sent, message.text.clone())
         ).expect("Emit error");
     }
     
@@ -70,8 +97,8 @@ impl SessionInner {
 
 fn register_callbacks(ctx: &DbConnection, session: SessionState) {
     let inner = session.clone();
-    ctx.db.chat().on_insert(move |_ctx, chat| {
-        inner.lock().unwrap().on_chat_insert(chat);
+    ctx.db.user().on_insert(move |_ctx, user| {
+        inner.lock().unwrap().on_user_insert(user);
     });
 
     let inner = session.clone();
@@ -88,24 +115,28 @@ fn on_sub_error(_ctx: &ErrorContext, err: Error) {
 fn subscribe_to_tables(ctx: &DbConnection) {
     ctx.subscription_builder()
         .on_error(on_sub_error)
-        .subscribe(["SELECT * FROM user", "SELECT * FROM message"]);
+        .subscribe(["SELECT * FROM user", "SELECT * FROM message",]);
 }
 
-#[tauri::command]
-fn connect(addr: Option<String>, session: State<SessionState>) -> bool { 
-    let session_inner = session.inner().clone();
-
+fn try_connect(addr: Option<String>, session: SessionState) {
+    let on_connect_inner = session.clone();
+    let on_disconnect_inner = session.clone();
+    
     let addr = addr.unwrap_or(ADDR.to_string());
     let uri = get_uri(addr.clone());
     let s_addr = addr.clone();
     let res = DbConnection::builder()
         .on_connect(move |_ctx, identity, token| {
-            // Save current identity
-            session_inner.lock().unwrap().identity = Some(identity);
+            on_connect_inner.lock().unwrap().on_connect(identity);
+            println!("Connected!");
 
             if let Err(e) = creds_store(addr).save(token) {
                 eprintln!("Failed to save credentials: {:?}", e);
             }
+        })
+        .on_disconnect(move |_ctx, err| {
+            let error = err.and_then(|e| Some(e.to_string()));
+            on_disconnect_inner.lock().unwrap().on_disconnect(error);
         })
         .with_token(creds_store(s_addr).load().expect("Error loading credentials"))
         .with_module_name(DB_NAME.to_string())
@@ -115,25 +146,93 @@ fn connect(addr: Option<String>, session: State<SessionState>) -> bool {
     match res {
         Ok(connection) => {
             // Setup spacetime callbacks, get tables
-            register_callbacks(&connection, session.inner().clone());
+            register_callbacks(&connection, session.clone());
             subscribe_to_tables(&connection);
 
             connection.run_threaded();
             session.lock().unwrap().connection = Some(connection);
-            return true;
         },
         Err(e) => {
-            eprintln!("Spacetime error: {}", e);
-            return false;
+            session.lock().unwrap().on_connect_error(e.to_string());
         }
     }
+}
+
+#[tauri::command]
+fn connect(addr: Option<String>, session: State<SessionState>, connect_handler: State<ConnectionState>) { 
+    // Clear connect handler if finished
+    if let Some(handler) = connect_handler.lock().unwrap().0.take() {
+        if !handler.is_finished() {
+            connect_handler.lock().unwrap().0 = Some(handler);
+        }
+    }
+
+    // Connect in thread
+    if connect_handler.lock().unwrap().0.is_none() {
+        let session_inner = session.inner().clone();
+        let handler = std::thread::spawn(move || try_connect(addr, session_inner));
+        
+        connect_handler.lock().unwrap().0 = Some(handler);
+    }
+}
+
+#[tauri::command]
+fn disconnect(session: State<SessionState>) {
+    let Some(connection) = &session.lock().unwrap().connection else {
+        return;
+    };
+
+    match connection.disconnect() {
+        _ => ()
+    }
+}
+
+#[tauri::command]
+fn signup(name: String, password: String, session: State<SessionState>) {
+    let Some(connection) = &session.lock().unwrap().connection else {
+        return;
+    };
+
+    connection.reducers.signup(name, password).expect("Spacetime error");
+}
+
+#[tauri::command]
+fn send_message(text: String, session: State<SessionState>) {
+    let Some(connection) = &session.lock().unwrap().connection else {
+        return;
+    };
+
+    connection.reducers.send_message(text).expect("Spacetime error");
+}
+
+#[tauri::command]
+fn count_messages(session: State<SessionState>) -> u64 {
+    let Some(connection) = &session.lock().unwrap().connection else {
+        return 0;
+    };
+
+    connection.db.message().count()
+}
+
+#[tauri::command]
+fn get_messages(session: State<SessionState>, start: usize, end: usize) -> Vec<(u32, i64, String)> {
+    let Some(connection) = &session.lock().unwrap().connection else {
+        return vec![];
+    };
+
+    let mut messages = connection.db.message().iter().collect::<Vec<_>>();
+    messages.sort_by_key(|m| m.sent);
+
+    let payload = messages[start..end].to_vec();
+    payload.into_iter().map(|p| (p.sender, p.sent.to_micros_since_unix_epoch(), p.text)).collect()
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
-        .invoke_handler(tauri::generate_handler![connect])
+        .manage(Arc::new(Mutex::new(ConnectionHandler::default())))
+        .invoke_handler(tauri::generate_handler![connect, disconnect, signup, send_message, count_messages, get_messages])
         .build(tauri::generate_context!())
         .expect("error while running tauri application");
 

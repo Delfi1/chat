@@ -1,102 +1,80 @@
 use spacetimedb::*;
 
-#[spacetimedb::table(name=credentials)]
+#[table(name=credentials)]
 // User private data
 struct UserCredentials {
     #[primary_key]
     user_id: u32,
+    password: String,
     connections: Vec<Identity>,
-    password: String
 }
 
-/// Identity linked user with
-#[spacetimedb::table(name=linked)]
-struct LinkedUser {
-    id: u32,
-    identity: Identity
+/// Get user credentials linked with identity 
+fn get_creds(ctx: &ReducerContext) -> Option<UserCredentials> {
+    ctx.db.credentials().iter()
+        .find(|c| c.connections.contains(&ctx.sender))
 }
 
-#[spacetimedb::table(name=user, public)]
+#[table(name=user, public)]
 pub struct User {
     #[primary_key]
     #[auto_inc]
     id: u32,
+    #[unique]
     name: String,
     online: Vec<Identity>,
 }
 
-#[spacetimedb::table(name=chat, public)]
-pub struct Chat {
-    #[primary_key]
-    #[auto_inc]
-    id: u32,
-    name: String,
-    /// Vec of users ids
-    users: Vec<u32>
-}
-
-#[spacetimedb::table(name=message, public)]
+#[table(name=message, public)]
 pub struct Message {
-    chat: u32,
     sender: u32,
     sent: Timestamp,
     text: String,
 }
 
-#[spacetimedb::table(name=view)]
-/// User access to chat
-struct ViewAccess {
-    chat: u32,
-    user: u32
+#[reducer]
+pub fn signup(ctx: &ReducerContext, name: String, password: String) -> Result<(), String> {
+    if get_creds(ctx).is_some() {
+        return Err("Already loginned in".to_string());
+    };
+
+    if ctx.db.user().name().find(name.clone()).is_some() {
+        return Err("User with this name is already exists".to_string());
+    };
+
+    let user = ctx.db.user().insert(User { id: 0, name, online: vec![ctx.sender] });
+    ctx.db.credentials().insert( UserCredentials { user_id: user.id, password, connections: vec![ctx.sender] });
+
+    Ok(())
 }
 
-// Content filters
-#[client_visibility_filter]
-const CHAT_ACCESS_FILTER: Filter = Filter::Sql("
-    SELECT c.*
-    FROM chat c
-    JOIN view v ON v.chat = c.id
-    JOIN linked l ON l.id = v.user
-    WHERE l.identity = :sender
-");
+#[reducer]
+pub fn login(ctx: &ReducerContext, name: String, password: String) -> Result<(), String> {
+    if get_creds(ctx).is_some() {
+        return Err("Already loginned in".to_string());
+    };
 
-#[client_visibility_filter]
-const MESSAGE_ACCESS_FILTER: Filter = Filter::Sql("
-    SELECT m.*
-    FROM message m
-    JOIN chat c ON c.id = m.chat
-    JOIN view v ON v.chat = c.id
-    JOIN linked l ON l.id = v.user
-    WHERE l.identity = :sender
-");
+    if ctx.db.user().name().find(name.clone()).is_none() {
+        return Err("User with this name is not exists".to_string());
+    };
 
-// Reducers
-#[spacetimedb::reducer]
-pub fn signup(_ctx: &ReducerContext, _name: String, _password: String) {
-    
+    let user = ctx.db.user().insert(User { id: 0, name, online: vec![ctx.sender] });
+    ctx.db.credentials().insert( UserCredentials { user_id: user.id, password, connections: vec![ctx.sender] });
+
+    Ok(())
 }
 
-#[spacetimedb::reducer]
-pub fn login(_ctx: &ReducerContext, _name: String, _password: String) {
-    
-}
+#[reducer]
+pub fn send_message(ctx: &ReducerContext, text: String) -> Result<(), String> {
+    let Some(creds) = get_creds(ctx) else {
+        return Err("Not loginned in".to_string());
+    };
 
-#[spacetimedb::reducer]
-pub fn logout(_ctx: &ReducerContext) {
+    ctx.db.message().insert(Message {
+        sender: creds.user_id,
+        sent: ctx.timestamp,
+        text
+    });
 
-}
-
-#[spacetimedb::reducer]
-pub fn send_message(_ctx: &ReducerContext, _chat: u32, _text: String) {
-
-}
-
-#[spacetimedb::reducer(client_connected)]
-pub fn identity_connected(_ctx: &ReducerContext) {
-
-}
-
-#[spacetimedb::reducer(client_disconnected)]
-pub fn identity_disconnected(_ctx: &ReducerContext) {
-
+    Ok(())
 }
