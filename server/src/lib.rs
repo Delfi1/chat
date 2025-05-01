@@ -28,6 +28,9 @@ pub struct User {
 
 #[table(name=message, public)]
 pub struct Message {
+    #[primary_key]
+    #[auto_inc]
+    id: u32,
     sender: u32,
     sent: Timestamp,
     text: String,
@@ -72,6 +75,7 @@ pub fn send_message(ctx: &ReducerContext, text: String) -> Result<(), String> {
     };
 
     ctx.db.message().insert(Message {
+        id: 0,
         sender: creds.user_id,
         sent: ctx.timestamp,
         text

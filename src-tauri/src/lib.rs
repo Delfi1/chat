@@ -76,6 +76,15 @@ impl SessionInner {
         self.app.emit("on_connect", ()).expect("Emit error");
     }
 
+    pub fn get_users(&self) -> Vec<UserPayload> {
+        let Some(connection) = &self.connection else {
+            return Vec::new();
+        };
+
+        connection.db.user().iter()
+            .map(|u| UserPayload::new(u)).collect()
+    }
+
     pub fn on_connect_error(&mut self, error: String) {
         self.connection = None;
         self.identity = None;
@@ -96,18 +105,23 @@ impl SessionInner {
             self.app.emit("loginned", UserPayload::new(user.clone())).expect("Emit error");
         }
 
-        self.app.emit("user_inserted", 
-            (user.id, user.name.clone(), !user.online.is_empty())
-        ).expect("Emit error");
+        self.app.emit("user_inserted", ()).expect("Emit error");
+    }
+
+    pub fn on_user_updated(&mut self) {
+        self.app.emit("user_updated", ()).expect("Emit error");
     }
 
     pub fn on_message_insert(&mut self, message: &Message) {
-        let sent = message.sent.to_duration_since_unix_epoch().expect("Unexpected");
         self.app.emit("message_inserted", 
-            (message.sender, sent, message.text.clone())
+            MessagePayload::new(message.clone())
         ).expect("Emit error");
     }
     
+    pub fn on_message_updated(&mut self) {
+        self.app.emit("message_updated", ()).expect("Emit error");
+    }
+
     pub fn exit(&self) {
         println!("Exit");
 
@@ -130,6 +144,16 @@ fn register_callbacks(ctx: &DbConnection, session: SessionState) {
     let inner = session.clone();
     ctx.db.message().on_insert(move |_ctx, message| {
         inner.lock().unwrap().on_message_insert(message);
+    });
+
+    let inner = session.clone();
+    ctx.db.message().on_update(move |_ctx, _old, _new| {
+        inner.lock().unwrap().on_message_updated();
+    });
+
+    let inner = session.clone();
+    ctx.db.user().on_update(move |_ctx, _old, _new| {
+        inner.lock().unwrap().on_user_updated();
     });
 }
 
@@ -241,7 +265,7 @@ fn count_messages(session: State<SessionState>) -> u64 {
 }
 
 #[tauri::command]
-fn get_messages(session: State<SessionState>, start: usize, end: usize) -> Vec<MessagePayload> {
+fn get_messages(session: State<SessionState>) -> Vec<MessagePayload> {
     let Some(connection) = &session.lock().unwrap().connection else {
         return vec![];
     };
@@ -249,16 +273,25 @@ fn get_messages(session: State<SessionState>, start: usize, end: usize) -> Vec<M
     let mut messages = connection.db.message().iter().collect::<Vec<_>>();
     messages.sort_by_key(|m| m.sent);
 
-    let payload = messages[start..end].to_vec();
-    payload.into_iter().map(|m| MessagePayload::new(m)).collect()
+    //let payload = messages[start..end].to_vec();
+    messages.into_iter().map(|m| MessagePayload::new(m)).collect()
 }
+
+#[tauri::command]
+fn get_users(session: State<SessionState>) -> Vec<UserPayload> {
+    session.lock().unwrap().get_users()
+}
+
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .manage(Arc::new(Mutex::new(ConnectionHandler::default())))
-        .invoke_handler(tauri::generate_handler![connect, disconnect, signup, send_message, count_messages, get_messages])
+        .invoke_handler(tauri::generate_handler![connect, disconnect, signup,
+             send_message, count_messages, get_messages,
+              get_users, 
+        ])
         .build(tauri::generate_context!())
         .expect("error while running tauri application");
 

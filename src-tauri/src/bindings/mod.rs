@@ -130,7 +130,9 @@ impl __sdk::DbUpdate for DbUpdate {
         diff.credentials = cache
             .apply_diff_to_table::<UserCredentials>("credentials", &self.credentials)
             .with_updates_by_pk(|row| &row.user_id);
-        diff.message = cache.apply_diff_to_table::<Message>("message", &self.message);
+        diff.message = cache
+            .apply_diff_to_table::<Message>("message", &self.message)
+            .with_updates_by_pk(|row| &row.id);
         diff.user = cache
             .apply_diff_to_table::<User>("user", &self.user)
             .with_updates_by_pk(|row| &row.id);
