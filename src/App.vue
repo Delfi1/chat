@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { Window, LogicalSize } from '@tauri-apps/api/window';
 import { onBeforeMount, ref } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
@@ -8,10 +9,12 @@ import AuthPage from './AuthPage.vue';
 import MainPage from './MainPage.vue';
 import { UserPayload, MessagePayload } from './api.ts';
 
+const appWindow = Window.getCurrent();
 const loginned = ref(false);
 const connected = ref(false);
 const connecting = ref(false);
-const connect_errorMsg = ref<string>('');
+const loginErrorMsg = ref('')
+const connectErrorMsg = ref('');
 
 const user = ref<UserPayload>();
 const users = ref([] as UserPayload[]);
@@ -30,6 +33,17 @@ function signup(name: string, password: string) {
   invoke('signup', { name, password });
 }
 
+function logout() {
+  invoke('logout');
+  console.log("Logout");
+  loginned.value = false;
+  user.value = undefined;
+}
+
+function send_message(text: string) {
+  invoke('send_message', { "text": text } );
+}
+
 function update_lists() {
   invoke<UserPayload[]>('get_users').then((result) => {
     users.value = result;
@@ -40,25 +54,45 @@ function update_lists() {
   });
 }
 
+function main_state() {
+  appWindow.setSize(new LogicalSize(800, 600));
+  appWindow.setMinSize(new LogicalSize(800, 600));
+  appWindow.setMaxSize(undefined);
+  appWindow.setResizable(true);
+  appWindow.setMaximizable(true);
+
+  connected.value = true;
+  connecting.value = false;
+  connectErrorMsg.value = '';
+}
+
+function connect_state() {
+  appWindow.setSize(new LogicalSize(400, 600));
+  appWindow.setMinSize(undefined);
+  appWindow.setMaxSize(new LogicalSize(400, 600));
+  appWindow.setResizable(false);
+  appWindow.setMaximizable(false);
+
+  connected.value = false;
+  loginned.value = false;
+  user.value = undefined;
+  users.value = [];
+  messages.value = [];
+}
+
 onBeforeMount(() => {
   listen('on_connect', (_ev) => {
-    connected.value = true;
-    connecting.value = false;
-    connect_errorMsg.value = '';
+    main_state();
   });
 
   listen('on_connect_error', (ev) => {
-    connected.value = false;
-    connect_errorMsg.value = ev.payload as string;
+    connectErrorMsg.value = ev.payload as string;
     connecting.value = false;
+    connect_state();
   });
 
   listen('on_disconnect', (_ev) => {
-    connected.value = false;
-    loginned.value = false;
-    user.value = undefined;
-    users.value = [];
-    messages.value = [];
+    connect_state();
   });
 
   // Users updates
@@ -86,16 +120,35 @@ onBeforeMount(() => {
 
     update_lists();
   });
+
+  // Set current state as connect
+  connect_state();
 });
 </script>
 
 <template>
-<ConnectPage :connecting="connecting" :connected="connected" :errorMsg="connect_errorMsg" @on_connect="connect" v-if="!connected"></ConnectPage>
-<AuthPage v-if="connected && !loginned" @onLogin="login" @onSignup="signup"></AuthPage>
-<MainPage v-if="connected && loginned" :user="user" :messages="messages" :users="users"></MainPage>
-
+<div class="main">
+  <ConnectPage :connecting="connecting" :connected="connected" :errorMsg="connectErrorMsg" @on_connect="connect" v-if="!connected"></ConnectPage>
+  <AuthPage v-if="connected && !loginned" :error-msg="loginErrorMsg" @onLogin="login" @onSignup="signup"></AuthPage>
+  <MainPage v-if="connected && loginned" @send_message="send_message" @logout="logout" :user="user" :messages="messages" :users="users"></MainPage>
+</div>
 </template>
 
 <style>
+*, *:before, *:after{
+  padding: 0;
+  margin: 0;
+  box-sizing: border-box; 
+}
+* {
+  font-family: Avenir;
+}
+.main {
+  width: 100%;
+  height: 100%;
+  position: absolute;
+  background-color: #dff1ff;
+
+}
 
 </style>

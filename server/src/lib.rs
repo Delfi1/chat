@@ -54,17 +54,36 @@ pub fn signup(ctx: &ReducerContext, name: String, password: String) -> Result<()
 
 #[reducer]
 pub fn login(ctx: &ReducerContext, name: String, password: String) -> Result<(), String> {
-    if get_creds(ctx).is_some() {
-        return Err("Already loginned in".to_string());
-    };
-
-    if ctx.db.user().name().find(name.clone()).is_none() {
+    let Some(mut user) = ctx.db.user().name().find(name) else {
         return Err("User with this name is not exists".to_string());
     };
+    let mut creds = ctx.db.credentials().user_id().find(user.id).unwrap();
 
-    let user = ctx.db.user().insert(User { id: 0, name, online: vec![ctx.sender] });
-    ctx.db.credentials().insert( UserCredentials { user_id: user.id, password, connections: vec![ctx.sender] });
+    if creds.password != password {
+        return Err("Invalid password".to_string());
+    }
 
+    creds.connections.push(ctx.sender);
+    user.online.push(ctx.sender);
+
+    ctx.db.credentials().user_id().update(creds);
+    ctx.db.user().id().update(user);
+
+    Ok(())
+}
+
+#[reducer]
+pub fn logout(ctx: &ReducerContext) -> Result<(), String> {
+    let Some(mut creds) = get_creds(ctx) else {
+        return Err("You are not logged in".to_string());
+    };
+    let mut user = ctx.db.user().id().find(creds.user_id).unwrap();
+    creds.connections.retain(|i| i != &ctx.sender);
+    user.online.retain(|i| i != &ctx.sender);
+
+    ctx.db.user().id().update(user);
+    ctx.db.credentials().user_id().update(creds);
+    
     Ok(())
 }
 

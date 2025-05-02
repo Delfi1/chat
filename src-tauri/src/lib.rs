@@ -22,13 +22,13 @@ fn creds_store(addr: String) -> credentials::File {
 #[derive(Clone, serde::Serialize)]
 pub struct MessagePayload {
     pub sender: u32,
-    pub sent: i64,
+    pub sent: u128,
     pub text: String
 }
 
 impl MessagePayload {
     pub fn new(message: Message) -> Self {
-        let sent = message.sent.to_micros_since_unix_epoch();
+        let sent = message.sent.to_duration_since_unix_epoch().unwrap().as_millis();
         Self { sender: message.sender, sent, text: message.text }
     }
 }
@@ -108,7 +108,12 @@ impl SessionInner {
         self.app.emit("user_inserted", ()).expect("Emit error");
     }
 
-    pub fn on_user_updated(&mut self) {
+    pub fn on_user_updated(&mut self, _old: &User, new: &User) {
+        let identity = &self.identity.unwrap();
+        if new.online.contains(&identity) {
+            self.app.emit("loginned", UserPayload::new(new.clone())).expect("Emit error");
+        }
+
         self.app.emit("user_updated", ()).expect("Emit error");
     }
 
@@ -152,8 +157,8 @@ fn register_callbacks(ctx: &DbConnection, session: SessionState) {
     });
 
     let inner = session.clone();
-    ctx.db.user().on_update(move |_ctx, _old, _new| {
-        inner.lock().unwrap().on_user_updated();
+    ctx.db.user().on_update(move |_ctx, old, new| {
+        inner.lock().unwrap().on_user_updated(old, new);
     });
 }
 
@@ -210,6 +215,11 @@ fn try_connect(addr: Option<String>, session: SessionState) {
 
 #[tauri::command]
 fn connect(addr: Option<String>, session: State<SessionState>, connect_handler: State<ConnectionState>) { 
+    if let Some(connection) = session.lock().unwrap().connection.take() {
+        connection.disconnect().expect("Spacetime error");
+        session.lock().unwrap().connection = None;
+    }
+
     // Clear connect handler if finished
     if let Some(handler) = connect_handler.lock().unwrap().0.take() {
         if !handler.is_finished() {
@@ -235,6 +245,24 @@ fn disconnect(session: State<SessionState>) {
     match connection.disconnect() {
         _ => ()
     }
+}
+
+#[tauri::command]
+fn login(name: String, password: String, session: State<SessionState>) {
+    let Some(connection) = &session.lock().unwrap().connection else {
+        return;
+    };
+
+    connection.reducers.login(name, password).expect("Spacetime error");
+}
+
+#[tauri::command]
+fn logout(session: State<SessionState>) {
+    let Some(connection) = &session.lock().unwrap().connection else {
+        return;
+    };
+
+    connection.reducers.logout().expect("Spacetime error");
 }
 
 #[tauri::command]
@@ -282,15 +310,15 @@ fn get_users(session: State<SessionState>) -> Vec<UserPayload> {
     session.lock().unwrap().get_users()
 }
 
-
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .manage(Arc::new(Mutex::new(ConnectionHandler::default())))
-        .invoke_handler(tauri::generate_handler![connect, disconnect, signup,
-             send_message, count_messages, get_messages,
-              get_users, 
+        .invoke_handler(tauri::generate_handler![
+            connect, disconnect, signup, login,
+            logout, send_message, count_messages,
+            get_messages, get_users, 
         ])
         .build(tauri::generate_context!())
         .expect("error while running tauri application");

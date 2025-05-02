@@ -7,7 +7,6 @@ const props = defineProps<{
   connecting: boolean
 }>();
 const emit = defineEmits(['on_connect']);
-
 const addr = ref('localhost');
 
 function connect() {
@@ -28,42 +27,69 @@ function connect() {
 </template>
 
 <style>
-* {
-  font-family: Avenir;
-}
 .loader {
-  border: 8px solid #f3f3f3; /* Light grey */
-  border-top: 8px solid #3498db; /* Blue */
+  border: 8px solid #f3f3f3;
+  border-top: 8px solid #7dc7ff;
   border-radius: 50%;
-  margin-top: 60px;
-  margin-left: 60px;
+  margin-top: 10px;
   width: 60px;
   height: 60px;
-  animation: spin 2.5s linear infinite;
+  animation: spin 2.5s ease-in-out infinite;
 }
+
 .card {
-  width: 200px;
-  position: relative;
-  left: calc(50vw - 100px);
+  justify-content: center;
   text-align: center;
-  padding-top: 6vw;
+  display: grid;
+  place-items: center;
 }
-input {
-  width: calc(100% - 16px);
-  margin-top: 12px;
-  padding: 8px;
-  background-color: #e6f7ff;
-  outline: none;
-  border: 1px solid #e6f7ff;
+
+.card input{
+  height: 24px;
+  width: 260px;
+  background-color: rgba(255,255,255,0.07);
+  background: #fff;
+  border-radius: 3px;
+  padding: 0 8px;
+  margin-top: 8px;
+  text-align: center;
+  font-size: 14px;
+  font-weight: 300;
 }
-button {
-  margin-top: 12px;
-  width: 100%;
-  padding: 8px;
+::placeholder{
+  color: #3f627d;
+}
+
+.card button{
+  margin-top: 15px;
+  margin-bottom: 20px;
+  width: 280px;
+  background-color: #ffffff;
+  color: #080710;
+  transition: background-color 0.5s ease;
+  padding: 15px 0;
+  font-size: 18px;
+  font-weight: 600;
+  border-radius: 5px;
+  cursor: pointer;
+}
+.card button:hover {
+  background-color: #65bcff;
+}
+
+.card p {
+  width: 80%;
+}
+
+.card h2 {
+  width: 120px;
+  margin: 20px;
+  text-align: center;
 }
 
 @keyframes spin {
   0% { transform: rotate(0deg); }
+  50% { transform: rotate(180deg); }
   100% { transform: rotate(360deg); }
 }
 </style>
