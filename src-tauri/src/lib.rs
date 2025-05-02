@@ -1,5 +1,6 @@
 use std::sync::{Arc, Mutex};
-use tauri::{AppHandle, Emitter, Manager, State, RunEvent};
+use tauri::{AppHandle, Emitter, Manager, RunEvent, State};
+use tauri_plugin_updater::UpdaterExt;
 
 mod bindings;
 use bindings::*;
@@ -19,17 +20,45 @@ fn creds_store(addr: String) -> credentials::File {
     credentials::File::new(format!("delfi-chat-{}", addr))
 }
 
+async fn update(app: tauri::AppHandle) -> tauri_plugin_updater::Result<()> {
+    if let Some(update) = app.updater()?.check().await? {
+        let mut downloaded = 0;
+        // alternatively we could also call update.download() and update.install() separately
+        update.download_and_install(
+            |chunk_length, content_length| {
+                downloaded += chunk_length;
+                println!("downloaded {downloaded} from {content_length:?}");
+            }, || {
+                println!("download finished");
+            },
+        ).await?;
+        
+        println!("update installed");
+        app.restart();
+    }
+
+    Ok(())
+}
+
 #[derive(Clone, serde::Serialize)]
 pub struct MessagePayload {
     pub sender: u32,
     pub sent: u128,
-    pub text: String
+    pub text: String,
 }
 
 impl MessagePayload {
     pub fn new(message: Message) -> Self {
-        let sent = message.sent.to_duration_since_unix_epoch().unwrap().as_millis();
-        Self { sender: message.sender, sent, text: message.text }
+        let sent = message
+            .sent
+            .to_duration_since_unix_epoch()
+            .unwrap()
+            .as_millis();
+        Self {
+            sender: message.sender,
+            sent,
+            text: message.text,
+        }
     }
 }
 
@@ -37,15 +66,18 @@ impl MessagePayload {
 pub struct UserPayload {
     pub id: u32,
     pub name: String,
-    pub online: bool
+    pub online: bool,
 }
 
 impl UserPayload {
     pub fn new(user: User) -> Self {
-        Self { id: user.id, name: user.name, online: !user.online.is_empty() }
+        Self {
+            id: user.id,
+            name: user.name,
+            online: !user.online.is_empty(),
+        }
     }
 }
-
 
 #[derive(Default)]
 struct ConnectionHandler(Option<std::thread::JoinHandle<()>>);
@@ -66,7 +98,7 @@ impl SessionInner {
         Self {
             app: handle.clone(),
             connection: None,
-            identity: None
+            identity: None,
         }
     }
 
@@ -81,15 +113,21 @@ impl SessionInner {
             return Vec::new();
         };
 
-        connection.db.user().iter()
-            .map(|u| UserPayload::new(u)).collect()
+        connection
+            .db
+            .user()
+            .iter()
+            .map(|u| UserPayload::new(u))
+            .collect()
     }
 
     pub fn on_connect_error(&mut self, error: String) {
         self.connection = None;
         self.identity = None;
         //println!("Error: {}", error);
-        self.app.emit("on_connect_error", error).expect("Emit error");
+        self.app
+            .emit("on_connect_error", error)
+            .expect("Emit error");
     }
 
     pub fn on_disconnect(&mut self, error: Option<String>) {
@@ -99,10 +137,16 @@ impl SessionInner {
         self.app.emit("on_disconnect", error).expect("Emit error");
     }
 
+    pub fn on_login_error(&mut self, error: String) {
+        self.app.emit("on_login_error", error).expect("Emit error");
+    }
+
     pub fn on_user_insert(&mut self, user: &User) {
         let identity = &self.identity.unwrap();
         if user.online.contains(&identity) {
-            self.app.emit("loginned", UserPayload::new(user.clone())).expect("Emit error");
+            self.app
+                .emit("loginned", UserPayload::new(user.clone()))
+                .expect("Emit error");
         }
 
         self.app.emit("user_inserted", ()).expect("Emit error");
@@ -111,18 +155,20 @@ impl SessionInner {
     pub fn on_user_updated(&mut self, _old: &User, new: &User) {
         let identity = &self.identity.unwrap();
         if new.online.contains(&identity) {
-            self.app.emit("loginned", UserPayload::new(new.clone())).expect("Emit error");
+            self.app
+                .emit("loginned", UserPayload::new(new.clone()))
+                .expect("Emit error");
         }
 
         self.app.emit("user_updated", ()).expect("Emit error");
     }
 
     pub fn on_message_insert(&mut self, message: &Message) {
-        self.app.emit("message_inserted", 
-            MessagePayload::new(message.clone())
-        ).expect("Emit error");
+        self.app
+            .emit("message_inserted", MessagePayload::new(message.clone()))
+            .expect("Emit error");
     }
-    
+
     pub fn on_message_updated(&mut self) {
         self.app.emit("message_updated", ()).expect("Emit error");
     }
@@ -130,12 +176,13 @@ impl SessionInner {
     pub fn exit(&self) {
         println!("Exit");
 
-        let Some(connection) = &self.connection
-        else { return };
+        let Some(connection) = &self.connection else {
+            return;
+        };
 
         match connection.disconnect() {
             Err(e) => eprintln!("Disconnect error {}", e),
-            _ => ()
+            _ => (),
         }
     }
 }
@@ -160,6 +207,20 @@ fn register_callbacks(ctx: &DbConnection, session: SessionState) {
     ctx.db.user().on_update(move |_ctx, old, new| {
         inner.lock().unwrap().on_user_updated(old, new);
     });
+
+    let inner = session.clone();
+    ctx.reducers.on_login(move |ctx, _name, _password| {
+        if let Status::Failed(err) = &ctx.event.status {
+            inner.lock().unwrap().on_login_error(err.to_string());
+        }
+    });
+
+    let inner = session.clone();
+    ctx.reducers.on_signup(move |ctx, _name, _password| {
+        if let Status::Failed(err) = &ctx.event.status {
+            inner.lock().unwrap().on_login_error(err.to_string());
+        }
+    });
 }
 
 fn on_sub_error(_ctx: &ErrorContext, err: Error) {
@@ -170,13 +231,13 @@ fn on_sub_error(_ctx: &ErrorContext, err: Error) {
 fn subscribe_to_tables(ctx: &DbConnection) {
     ctx.subscription_builder()
         .on_error(on_sub_error)
-        .subscribe(["SELECT * FROM user", "SELECT * FROM message",]);
+        .subscribe(["SELECT * FROM user", "SELECT * FROM message"]);
 }
 
 fn try_connect(addr: Option<String>, session: SessionState) {
     let on_connect_inner = session.clone();
     let on_disconnect_inner = session.clone();
-    
+
     let addr = addr.unwrap_or(ADDR.to_string());
     let uri = get_uri(addr.clone());
     let s_addr = addr.clone();
@@ -193,7 +254,11 @@ fn try_connect(addr: Option<String>, session: SessionState) {
             let error = err.and_then(|e| Some(e.to_string()));
             on_disconnect_inner.lock().unwrap().on_disconnect(error);
         })
-        .with_token(creds_store(s_addr).load().expect("Error loading credentials"))
+        .with_token(
+            creds_store(s_addr)
+                .load()
+                .expect("Error loading credentials"),
+        )
         .with_module_name(DB_NAME.to_string())
         .with_uri(uri)
         .build();
@@ -206,7 +271,7 @@ fn try_connect(addr: Option<String>, session: SessionState) {
 
             connection.run_threaded();
             session.lock().unwrap().connection = Some(connection);
-        },
+        }
         Err(e) => {
             session.lock().unwrap().on_connect_error(e.to_string());
         }
@@ -214,7 +279,11 @@ fn try_connect(addr: Option<String>, session: SessionState) {
 }
 
 #[tauri::command]
-fn connect(addr: Option<String>, session: State<SessionState>, connect_handler: State<ConnectionState>) { 
+fn connect(
+    addr: Option<String>,
+    session: State<SessionState>,
+    connect_handler: State<ConnectionState>,
+) {
     if let Some(connection) = session.lock().unwrap().connection.take() {
         connection.disconnect().expect("Spacetime error");
         session.lock().unwrap().connection = None;
@@ -231,7 +300,7 @@ fn connect(addr: Option<String>, session: State<SessionState>, connect_handler: 
     if connect_handler.lock().unwrap().0.is_none() {
         let session_inner = session.inner().clone();
         let handler = std::thread::spawn(move || try_connect(addr, session_inner));
-        
+
         connect_handler.lock().unwrap().0 = Some(handler);
     }
 }
@@ -243,7 +312,7 @@ fn disconnect(session: State<SessionState>) {
     };
 
     match connection.disconnect() {
-        _ => ()
+        _ => (),
     }
 }
 
@@ -253,7 +322,10 @@ fn login(name: String, password: String, session: State<SessionState>) {
         return;
     };
 
-    connection.reducers.login(name, password).expect("Spacetime error");
+    connection
+        .reducers
+        .login(name, password)
+        .expect("Spacetime error");
 }
 
 #[tauri::command]
@@ -271,7 +343,10 @@ fn signup(name: String, password: String, session: State<SessionState>) {
         return;
     };
 
-    connection.reducers.signup(name, password).expect("Spacetime error");
+    connection
+        .reducers
+        .signup(name, password)
+        .expect("Spacetime error");
 }
 
 #[tauri::command]
@@ -280,7 +355,10 @@ fn send_message(text: String, session: State<SessionState>) {
         return;
     };
 
-    connection.reducers.send_message(text).expect("Spacetime error");
+    connection
+        .reducers
+        .send_message(text)
+        .expect("Spacetime error");
 }
 
 #[tauri::command]
@@ -302,7 +380,10 @@ fn get_messages(session: State<SessionState>) -> Vec<MessagePayload> {
     messages.sort_by_key(|m| m.sent);
 
     //let payload = messages[start..end].to_vec();
-    messages.into_iter().map(|m| MessagePayload::new(m)).collect()
+    messages
+        .into_iter()
+        .map(|m| MessagePayload::new(m))
+        .collect()
 }
 
 #[tauri::command]
@@ -313,12 +394,26 @@ fn get_users(session: State<SessionState>) -> Vec<UserPayload> {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let app = tauri::Builder::default()
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .setup(|app| {
+            let handle = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+              update(handle).await.unwrap();
+            });
+            Ok(())
+        })
         .plugin(tauri_plugin_opener::init())
         .manage(Arc::new(Mutex::new(ConnectionHandler::default())))
         .invoke_handler(tauri::generate_handler![
-            connect, disconnect, signup, login,
-            logout, send_message, count_messages,
-            get_messages, get_users, 
+            connect,
+            disconnect,
+            signup,
+            login,
+            logout,
+            send_message,
+            count_messages,
+            get_messages,
+            get_users,
         ])
         .build(tauri::generate_context!())
         .expect("error while running tauri application");
@@ -327,11 +422,11 @@ pub fn run() {
         RunEvent::Ready => {
             // Setup session data
             handle.manage(Arc::new(Mutex::new(SessionInner::new(handle))));
-        },
+        }
         RunEvent::Exit => {
             let session = handle.state::<SessionState>();
             session.lock().unwrap().exit();
-        },
-        _ => ()
+        }
+        _ => (),
     });
 }

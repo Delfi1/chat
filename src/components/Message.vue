@@ -3,7 +3,8 @@
 
   const props = defineProps<{
     user: UserPayload | undefined,
-    payload: MessagePayload
+    payload: MessagePayload,
+    self?: boolean
   }>();
   const emit = defineEmits(['on_edit']);
 
@@ -11,11 +12,7 @@
   // time formatter
   function time(unix: number): string {
     var date = new Date(unix);
-    var hour = date.getHours();
-    var min = date.getMinutes();
-    var sec = date.getSeconds();
-
-    return hour + ':' + min + ':' + sec
+    return date.toLocaleTimeString();
   }
 </script>
 
@@ -31,11 +28,20 @@
 
 <style>
 .message {
+  width: 500px;
   padding-left: 5px;
   padding-top: 10px;
+  padding-bottom: 10px;
+}
+
+.message:hover {
+  background-color: #c6e6ff;
 }
 
 .message p {
+  white-space: initial;
+  inline-size: 80%;
+  overflow-wrap: break-word;
   margin-left: 10px;
 }
 

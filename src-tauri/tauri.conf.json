@@ -23,6 +23,7 @@
   },
   "bundle": {
     "active": true,
+    "createUpdaterArtifacts": true,
     "targets": "all",
     "icon": [
       "icons/32x32.png",
@@ -31,5 +32,13 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ]
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IENDMTUyMkI0NTBENjI0NzYKUldSMkpOWlF0Q0lWekt4a3hyZ3pkVENFeHBJYzFPdzZSODhXNndodnh3WHhjcUlqVEhua1JzOHIK",
+      "endpoints": [
+        "https://github.com/user/repo/releases/latest/download/latest.json"
+      ]
+    }
   }
 }

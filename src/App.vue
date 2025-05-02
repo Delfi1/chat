@@ -85,10 +85,14 @@ onBeforeMount(() => {
     main_state();
   });
 
-  listen('on_connect_error', (ev) => {
-    connectErrorMsg.value = ev.payload as string;
+  listen<string>('on_connect_error', (ev) => {
+    connectErrorMsg.value = ev.payload;
     connecting.value = false;
     connect_state();
+  });
+
+  listen<string>('on_login_error', (ev) => {
+    loginErrorMsg.value = ev.payload;
   });
 
   listen('on_disconnect', (_ev) => {
@@ -117,6 +121,7 @@ onBeforeMount(() => {
   listen<UserPayload>('loginned', (ev) => {
     loginned.value = true;
     user.value = ev.payload;
+    loginErrorMsg.value = '';
 
     update_lists();
   });

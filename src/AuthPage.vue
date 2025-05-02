@@ -32,11 +32,11 @@ function signup() {
       </div>
     </form>
 
-    <form v-if="!login_page" @submit.prevent="signup">
+    <form v-show="!login_page" @submit.prevent="signup">
       <h1>Sign up</h1>
       <input type="text" placeholder="Username" v-model="username" required/>
       <input type="password" placeholder="Password" v-model="password" required/>
-      <p v-if="props.errorMsg">{{ props.errorMsg }}</p>
+      <p v-show="props.errorMsg">{{ props.errorMsg }}</p>
       
       <button type="submit" class="btn">Sign up</button>
       <div class="switch_link">
