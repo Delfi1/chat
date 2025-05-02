@@ -4,6 +4,8 @@
 #![allow(unused, clippy::all)]
 use spacetimedb_sdk::__codegen::{self as __sdk, __lib, __sats, __ws};
 
+pub mod client_connected_reducer;
+pub mod client_disconnected_reducer;
 pub mod credentials_table;
 pub mod login_reducer;
 pub mod logout_reducer;
@@ -15,6 +17,12 @@ pub mod user_credentials_type;
 pub mod user_table;
 pub mod user_type;
 
+pub use client_connected_reducer::{
+    client_connected, set_flags_for_client_connected, ClientConnectedCallbackId,
+};
+pub use client_disconnected_reducer::{
+    client_disconnected, set_flags_for_client_disconnected, ClientDisconnectedCallbackId,
+};
 pub use credentials_table::*;
 pub use login_reducer::{login, set_flags_for_login, LoginCallbackId};
 pub use logout_reducer::{logout, set_flags_for_logout, LogoutCallbackId};
@@ -34,6 +42,8 @@ pub use user_type::User;
 /// to indicate which reducer caused the event.
 
 pub enum Reducer {
+    ClientConnected,
+    ClientDisconnected,
     Login { name: String, password: String },
     Logout,
     SendMessage { text: String },
@@ -47,6 +57,8 @@ impl __sdk::InModule for Reducer {
 impl __sdk::Reducer for Reducer {
     fn reducer_name(&self) -> &'static str {
         match self {
+            Reducer::ClientConnected => "client_connected",
+            Reducer::ClientDisconnected => "client_disconnected",
             Reducer::Login { .. } => "login",
             Reducer::Logout => "logout",
             Reducer::SendMessage { .. } => "send_message",
@@ -58,6 +70,14 @@ impl TryFrom<__ws::ReducerCallInfo<__ws::BsatnFormat>> for Reducer {
     type Error = __sdk::Error;
     fn try_from(value: __ws::ReducerCallInfo<__ws::BsatnFormat>) -> __sdk::Result<Self> {
         match &value.reducer_name[..] {
+            "client_connected" => Ok(__sdk::parse_reducer_args::<
+                client_connected_reducer::ClientConnectedArgs,
+            >("client_connected", &value.args)?
+            .into()),
+            "client_disconnected" => Ok(__sdk::parse_reducer_args::<
+                client_disconnected_reducer::ClientDisconnectedArgs,
+            >("client_disconnected", &value.args)?
+            .into()),
             "login" => Ok(__sdk::parse_reducer_args::<login_reducer::LoginArgs>(
                 "login",
                 &value.args,

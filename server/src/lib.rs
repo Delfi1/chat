@@ -102,3 +102,23 @@ pub fn send_message(ctx: &ReducerContext, text: String) -> Result<(), String> {
 
     Ok(())
 }
+
+pub fn update_online(ctx: &ReducerContext, value: bool) {
+    if let Some(creds) = get_creds(ctx) {
+        let mut user = ctx.db.user().id().find(creds.user_id).unwrap();
+        user.online.retain(|v| v != &ctx.sender);
+        if value { user.online.push(ctx.sender) };
+
+        ctx.db.user().id().update(user);
+    }
+}
+
+#[reducer(client_connected)]
+pub fn client_connected(ctx: &ReducerContext) {
+    update_online(ctx, true);
+}
+
+#[reducer(client_disconnected)]
+pub fn client_disconnected(ctx: &ReducerContext) {
+    update_online(ctx, false);
+}

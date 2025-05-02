@@ -16,6 +16,10 @@ function send() {
   emit("send_message", text.value);
   text.value = '';
 }
+
+function all_online(): UserPayload[] {
+  return props.users.filter((u) => u.online);
+}
 </script>
 
 <template>
@@ -25,8 +29,8 @@ function send() {
         <button @click="emit('logout')">Logout</button>
       </div>
       <div class="users-list">
-        <h1>Users: {{ props.users.length }}</h1>
-        <User v-for="user in props.users" :payload="user"></User>
+        <h1>Users: {{ all_online().length }}</h1>
+        <User v-for="user in all_online()" :payload="user"></User>
       </div>
     </div>
     <div class="main-box">
