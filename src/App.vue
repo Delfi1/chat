@@ -20,7 +20,6 @@ const user = ref<UserPayload>();
 const users = ref([] as UserPayload[]);
 
 const messages_len = ref(0);
-const scroll = ref(0);
 const messages = ref([] as MessagePayload[]);
 
 function connect(addr: string) {
@@ -55,11 +54,13 @@ function update_lists() {
   invoke<MessagePayload[]>('get_messages', {"start": 0, "end": 100}).then((result) => {
     messages.value = result;
     var area = document.getElementById("messages-area") as HTMLElement;
-    area.scrollTop = area?.scrollHeight as number;
+    area.scrollTo(0, area.scrollHeight);
   });
 
   invoke<number>('messages_len').then((result) => {
     messages_len.value = result;
+    var area = document.getElementById("messages-area") as HTMLElement;
+    area.scrollTo(0, area.scrollHeight);
   });
 }
 
