@@ -6,6 +6,7 @@ use spacetimedb_sdk::__codegen::{self as __sdk, __lib, __sats, __ws};
 
 pub mod credentials_table;
 pub mod login_reducer;
+pub mod logout_reducer;
 pub mod message_table;
 pub mod message_type;
 pub mod send_message_reducer;
@@ -16,6 +17,7 @@ pub mod user_type;
 
 pub use credentials_table::*;
 pub use login_reducer::{login, set_flags_for_login, LoginCallbackId};
+pub use logout_reducer::{logout, set_flags_for_logout, LogoutCallbackId};
 pub use message_table::*;
 pub use message_type::Message;
 pub use send_message_reducer::{send_message, set_flags_for_send_message, SendMessageCallbackId};
@@ -33,6 +35,7 @@ pub use user_type::User;
 
 pub enum Reducer {
     Login { name: String, password: String },
+    Logout,
     SendMessage { text: String },
     Signup { name: String, password: String },
 }
@@ -45,6 +48,7 @@ impl __sdk::Reducer for Reducer {
     fn reducer_name(&self) -> &'static str {
         match self {
             Reducer::Login { .. } => "login",
+            Reducer::Logout => "logout",
             Reducer::SendMessage { .. } => "send_message",
             Reducer::Signup { .. } => "signup",
         }
@@ -56,6 +60,11 @@ impl TryFrom<__ws::ReducerCallInfo<__ws::BsatnFormat>> for Reducer {
         match &value.reducer_name[..] {
             "login" => Ok(__sdk::parse_reducer_args::<login_reducer::LoginArgs>(
                 "login",
+                &value.args,
+            )?
+            .into()),
+            "logout" => Ok(__sdk::parse_reducer_args::<logout_reducer::LogoutArgs>(
+                "logout",
                 &value.args,
             )?
             .into()),
