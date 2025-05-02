@@ -91,6 +91,7 @@ function signup() {
   color: black;
   font-weight: 500;
   line-height: 42px;
+  height: 42px;
   text-align: center;
   margin-bottom: 15px;
 }

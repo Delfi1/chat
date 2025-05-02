@@ -34,7 +34,7 @@ function all_online(): UserPayload[] {
       </div>
     </div>
     <div class="main-box">
-      <div class="messages-box">
+      <div class="messages-box" id="messages-area">
         <Message v-for="message in props.messages" :user="sender(props.users, message)" :payload="message"></Message>
       </div>
       <div class="write-box">

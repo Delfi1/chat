@@ -285,24 +285,24 @@ fn connect(
     connect_handler: State<ConnectionState>,
 ) {
     if let Some(connection) = session.lock().unwrap().connection.take() {
-        connection.disconnect().expect("Spacetime error");
-        session.lock().unwrap().connection = None;
-    }
-
-    // Clear connect handler if finished
-    if let Some(handler) = connect_handler.lock().unwrap().0.take() {
-        if !handler.is_finished() {
-            connect_handler.lock().unwrap().0 = Some(handler);
+        match connection.disconnect() {
+            Err(e) => eprintln!("Disconnect error {}", e),
+            _ => (),
         }
     }
 
-    // Connect in thread
-    if connect_handler.lock().unwrap().0.is_none() {
-        let session_inner = session.inner().clone();
-        let handler = std::thread::spawn(move || try_connect(addr, session_inner));
-
-        connect_handler.lock().unwrap().0 = Some(handler);
+    // Clear connect handler and join;
+    if let Some(handler) = connect_handler.lock().unwrap().0.take() {
+        match handler.join() {
+            _ => ()
+        }
     }
+
+    // Connect to STDB in thread
+    let session_inner = session.inner().clone();
+    let handler = std::thread::spawn(move || try_connect(addr, session_inner));
+
+    connect_handler.lock().unwrap().0 = Some(handler);
 }
 
 #[tauri::command]
@@ -362,16 +362,16 @@ fn send_message(text: String, session: State<SessionState>) {
 }
 
 #[tauri::command]
-fn count_messages(session: State<SessionState>) -> u64 {
+fn messages_len(session: State<SessionState>) -> usize {
     let Some(connection) = &session.lock().unwrap().connection else {
         return 0;
     };
 
-    connection.db.message().count()
+    connection.db.message().iter().count()
 }
 
 #[tauri::command]
-fn get_messages(session: State<SessionState>) -> Vec<MessagePayload> {
+fn get_messages(session: State<SessionState>, start: usize, end: usize) -> Vec<MessagePayload> {
     let Some(connection) = &session.lock().unwrap().connection else {
         return vec![];
     };
@@ -379,10 +379,12 @@ fn get_messages(session: State<SessionState>) -> Vec<MessagePayload> {
     let mut messages = connection.db.message().iter().collect::<Vec<_>>();
     messages.sort_by_key(|m| m.sent);
 
-    //let payload = messages[start..end].to_vec();
-    messages
+    let end = end.min(messages.len());
+    let start = start.min(end);
+
+    messages[start..end]
         .into_iter()
-        .map(|m| MessagePayload::new(m))
+        .map(|m| MessagePayload::new(m.clone()))
         .collect()
 }
 
@@ -411,7 +413,7 @@ pub fn run() {
             login,
             logout,
             send_message,
-            count_messages,
+            messages_len,
             get_messages,
             get_users,
         ])
