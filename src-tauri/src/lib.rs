@@ -184,7 +184,6 @@ impl SessionInner {
         self.app.emit("message_removed", ()).expect("Emit error");
     }
 
-
     pub fn on_message_updated(&mut self) {
         self.app.emit("message_updated", ()).expect("Emit error");
     }
@@ -393,9 +392,11 @@ fn remove_message(id: u32, session: State<SessionState>) {
         return;
     };
 
-    connection.reducers.remove_message(id).expect("Spacetime error");
+    connection
+        .reducers
+        .remove_message(id)
+        .expect("Spacetime error");
 }
-
 
 #[tauri::command]
 fn messages_len(session: State<SessionState>) -> usize {
@@ -440,7 +441,7 @@ pub fn run() {
                 .set_focus();
         }));
     }
-        
+
     let app = builder
         .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(|app| {

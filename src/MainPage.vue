@@ -34,7 +34,7 @@ function all_online(): UserPayload[] {
         <button @click="emit('logout')">Logout</button>
       </div>
       <div class="users-list">
-        <h1>Users: {{ all_online().length }}</h1>
+        <h2>Online users: {{ all_online().length }}</h2>
         <User v-for="user in all_online()" :payload="user"></User>
       </div>
     </div>
@@ -64,7 +64,8 @@ function all_online(): UserPayload[] {
 
 .container button {
   background-color: #0091ff;
-  transition: all 0.8s ease;
+  margin: 4px;
+  transition: all 0.4s ease-in-out;
   transition-property: color, background-color;
   color: #080710;
   border: none;
@@ -80,6 +81,8 @@ function all_online(): UserPayload[] {
 .control-box {
   height: 100%;
   flex: 0.3;
+  margin-left: 10px;
+  margin-right: 10px;
   display: inline;
 }
 
@@ -91,13 +94,22 @@ function all_online(): UserPayload[] {
 .main-controls {
   width: 100%;
   height: 25%;
-  
-  background-color: #75c3ff;
+
+  position: relative;
+  width: 100%;
+  top: 1.5%;
+
+  border-radius: 4px;
+  background-color: #62bbff;
 }
 
 .users-list {
+  position: relative;
   width: 100%;
-  height: 75%;
+  height: 70%;
+  top: 2.5%;
+  padding: 5px;
+  border-radius: 4px;
   background-color: #87cbff;
 }
 
