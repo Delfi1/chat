@@ -3,18 +3,23 @@ import { ref } from 'vue';
 import { UserPayload, MessagePayload, sender } from './api';
 import Message from './components/Message.vue';
 import User from './components/User.vue';
+import { invoke } from '@tauri-apps/api/core';
 
 const props = defineProps<{
-  user: UserPayload | undefined
+  self: UserPayload | undefined
   users: UserPayload[],
   messages: MessagePayload[]
 }>();
-const emit = defineEmits(['send_message', 'logout']);
+const emit = defineEmits(['logout']);
 const text = ref('');
 
 function send() {
-  emit("send_message", text.value);
+  invoke('send_message', { "text": text.value } );
   text.value = '';
+}
+
+function remove(id: number) {
+  invoke('remove_message', { "id": id });
 }
 
 function all_online(): UserPayload[] {
@@ -36,7 +41,7 @@ function all_online(): UserPayload[] {
 
     <div class="main-box">
       <div class="messages-box" id="messages-area">
-        <Message v-for="message in props.messages" :user="sender(props.users, message)" :payload="message"></Message>
+        <Message v-for="message in props.messages" :self="self" :user="sender(props.users, message)" :payload="message" @remove="remove"></Message>
       </div>
       <div class="input-panel">
         <div class="input-box">
@@ -105,6 +110,7 @@ function all_online(): UserPayload[] {
 
 .messages-box {
   width: 100%;
+
   height: 90%;
   overflow-y: scroll;
 }

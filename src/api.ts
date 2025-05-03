@@ -3,10 +3,12 @@
 interface UserPayload {
     id: number,
     name: string,
+    id_admin: boolean,
     online: boolean
 }
 
 interface MessagePayload {
+    id: number,
     sender: number,
     sent: number,
     text: string

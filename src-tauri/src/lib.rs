@@ -45,6 +45,7 @@ async fn update(app: tauri::AppHandle) -> tauri_plugin_updater::Result<()> {
 
 #[derive(Clone, serde::Serialize)]
 pub struct MessagePayload {
+    pub id: u32,
     pub sender: u32,
     pub sent: u128,
     pub text: String,
@@ -58,6 +59,7 @@ impl MessagePayload {
             .unwrap()
             .as_millis();
         Self {
+            id: message.id,
             sender: message.sender,
             sent,
             text: message.text,
@@ -69,6 +71,7 @@ impl MessagePayload {
 pub struct UserPayload {
     pub id: u32,
     pub name: String,
+    pub is_admin: bool,
     pub online: bool,
 }
 
@@ -77,6 +80,7 @@ impl UserPayload {
         Self {
             id: user.id,
             name: user.name,
+            is_admin: user.is_admin,
             online: !user.online.is_empty(),
         }
     }
@@ -155,6 +159,10 @@ impl SessionInner {
         self.app.emit("user_inserted", ()).expect("Emit error");
     }
 
+    pub fn on_user_removed(&mut self, _user: &User) {
+        self.app.emit("user_removed", ()).expect("Emit error");
+    }
+
     pub fn on_user_updated(&mut self, _old: &User, new: &User) {
         let identity = &self.identity.unwrap();
         if new.online.contains(&identity) {
@@ -171,6 +179,11 @@ impl SessionInner {
             .emit("message_inserted", MessagePayload::new(message.clone()))
             .expect("Emit error");
     }
+
+    pub fn on_message_removed(&mut self, _message: &Message) {
+        self.app.emit("message_removed", ()).expect("Emit error");
+    }
+
 
     pub fn on_message_updated(&mut self) {
         self.app.emit("message_updated", ()).expect("Emit error");
@@ -207,8 +220,18 @@ fn register_callbacks(ctx: &DbConnection, session: SessionState) {
     });
 
     let inner = session.clone();
+    ctx.db.message().on_delete(move |_ctx, message| {
+        inner.lock().unwrap().on_message_removed(message);
+    });
+
+    let inner = session.clone();
     ctx.db.user().on_update(move |_ctx, old, new| {
         inner.lock().unwrap().on_user_updated(old, new);
+    });
+
+    let inner = session.clone();
+    ctx.db.user().on_delete(move |_ctx, user| {
+        inner.lock().unwrap().on_user_removed(user);
     });
 
     let inner = session.clone();
@@ -365,6 +388,16 @@ fn send_message(text: String, reply: Option<u32>, session: State<SessionState>) 
 }
 
 #[tauri::command]
+fn remove_message(id: u32, session: State<SessionState>) {
+    let Some(connection) = &session.lock().unwrap().connection else {
+        return;
+    };
+
+    connection.reducers.remove_message(id).expect("Spacetime error");
+}
+
+
+#[tauri::command]
 fn messages_len(session: State<SessionState>) -> usize {
     let Some(connection) = &session.lock().unwrap().connection else {
         return 0;
@@ -426,6 +459,7 @@ pub fn run() {
             login,
             logout,
             send_message,
+            remove_message,
             messages_len,
             get_messages,
             get_users,
