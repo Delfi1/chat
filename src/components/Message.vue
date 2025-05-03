@@ -28,7 +28,7 @@
 
 <style>
 .message {
-  width: 500px;
+  width: 100%;
   padding-left: 5px;
   padding-top: 10px;
   padding-bottom: 10px;
@@ -41,6 +41,7 @@
 .message p {
   white-space: initial;
   inline-size: 80%;
+  width: 80%;
   overflow-wrap: break-word;
   margin-left: 10px;
 }

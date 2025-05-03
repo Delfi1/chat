@@ -123,7 +123,6 @@ function signup() {
   margin-top: 20px;
   width: 100%;
   background-color: #0091ff;
-  transition: background-color 0.8s ease;
   transition: all 0.8s ease;
   transition-property: color, background-color;
   color: #080710;

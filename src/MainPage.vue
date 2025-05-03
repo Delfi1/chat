@@ -33,18 +33,18 @@ function all_online(): UserPayload[] {
         <User v-for="user in all_online()" :payload="user"></User>
       </div>
     </div>
+
     <div class="main-box">
       <div class="messages-box" id="messages-area">
         <Message v-for="message in props.messages" :user="sender(props.users, message)" :payload="message"></Message>
       </div>
-      <div class="write-box">
+      <div class="input-panel">
         <div class="input-box">
           <div class="line-box">
             <input v-model="text" placeholder="Send message" v-on:keyup.enter="send" />
             <button @click="send">Send</button>
           </div>
         </div>
-        
       </div>
     </div>
   </div>
@@ -52,22 +52,35 @@ function all_online(): UserPayload[] {
 
 <style>
 .container {
-  display: flex;
   width: 100%;
   height: 100%;
+  display: flex;
 }
 
 .container button {
-  margin: 10px;
-  width: 80px;
-  height: 25px;
+  background-color: #0091ff;
+  transition: all 0.8s ease;
+  transition-property: color, background-color;
+  color: #080710;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
 }
 
-/* Controls box styles */
+.container button:hover {
+  background-color: #0065b1;
+  color: #fff;
+}
+
 .control-box {
-  width: 350px;
   height: 100%;
+  flex: 0.3;
   display: inline;
+}
+
+.control-box button {
+  margin: 10px;
+  padding: 5px;
 }
 
 .main-controls {
@@ -83,11 +96,11 @@ function all_online(): UserPayload[] {
   background-color: #87cbff;
 }
 
-/* Main box styles */
+/* Main part */
 .main-box {
-  width: 100%;
   height: 100%;
-  display: inline-flexbox;
+  display: inline;
+  flex: 1;
 }
 
 .messages-box {
@@ -96,7 +109,7 @@ function all_online(): UserPayload[] {
   overflow-y: scroll;
 }
 
-.write-box {
+.input-panel {
   width: 100%;
   height: 8%;
   display: grid;

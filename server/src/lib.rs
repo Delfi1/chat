@@ -42,6 +42,14 @@ pub fn signup(ctx: &ReducerContext, name: String, password: String) -> Result<()
         return Err("Already loginned in".to_string());
     };
 
+    if name.len() < 3 {
+        return Err("Name must be at least 3 characters long".to_string());
+    } 
+
+    if password.len() < 4 {
+        return Err("Password must be at least 4 characters long".to_string());
+    } 
+
     if ctx.db.user().name().find(name.clone()).is_some() {
         return Err("User with this name is already exists".to_string());
     };
@@ -89,9 +97,14 @@ pub fn logout(ctx: &ReducerContext) -> Result<(), String> {
 
 #[reducer]
 pub fn send_message(ctx: &ReducerContext, text: String) -> Result<(), String> {
+    let text = text.trim().to_string();
     let Some(creds) = get_creds(ctx) else {
         return Err("Not loginned in".to_string());
     };
+
+    if text.is_empty() {
+        return Err("Empty message".to_string());
+    }
 
     ctx.db.message().insert(Message {
         id: 0,
