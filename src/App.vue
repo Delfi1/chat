@@ -3,6 +3,7 @@ import { Window, LogicalSize } from '@tauri-apps/api/window';
 import { onBeforeMount, ref } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
+
 import 'primeicons/primeicons.css'
 
 import ConnectPage from './ConnectPage.vue';
@@ -162,6 +163,10 @@ onBeforeMount(() => {
 }
 * {
   font-family: Avenir;
+  -webkit-user-select: none;
+  -moz-user-select: -moz-none;
+  -o-user-select: none;
+  user-select: none;
 }
 .main {
   width: 100%;

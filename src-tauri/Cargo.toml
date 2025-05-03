@@ -1,6 +1,6 @@
 [package]
 name = "chat"
-version = "0.0.2"
+version = "0.0.3"
 description = "A Tauri App"
 authors = ["Delfi"]
 edition = "2021"

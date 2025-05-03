@@ -1,6 +1,7 @@
 <script setup lang="ts">
   import { ref } from 'vue';
   import { MessagePayload, UserPayload } from '../api';
+  import { marked } from 'marked';
 
   const props = defineProps<{
     self: UserPayload | undefined,
@@ -8,6 +9,7 @@
     payload: MessagePayload,
   }>();
   const emit = defineEmits(['edit', 'reply', 'remove']);
+  import { openUrl } from '@tauri-apps/plugin-opener';
   const mouseHover = ref(false);
 
   // time formatter
@@ -43,6 +45,20 @@
   function edit() {
 
   }
+
+  // prevent url opening in href
+  function on_click(event: MouseEvent) {
+    var target = event.target;
+
+    if (target) {
+      var url = target['href'];
+
+      if (url) {
+        event.preventDefault();
+        openUrl(url);
+      }
+    }
+  }
 </script>
 
 <template>
@@ -56,7 +72,7 @@
         <button v-if="is_owner()" @click="edit"><i class="pi pi-pencil"></i></button>
       </div>
     </div>
-    <p> {{ props.payload.text }} </p>
+    <div @click="on_click" v-html="marked(props.payload.text)" class="text"></div>
   </div>
 </template>
 
@@ -70,14 +86,23 @@
   margin-top: 5px;
 }
 
+.message .text {
+  font-size: 16;
+  -webkit-user-select: initial;
+  -moz-user-select: -moz-all;
+  -o-user-select: all;
+  user-select: all;
+}
+
 .message .controls {
   position: relative;
   right: 10px;
-  padding: 2px;
-  top: -15px;
+  top: -12px;
   width: 150px;
   height: 32px;
-  background-color: rgb(173, 145, 255);
+  padding-right: 3px;
+  padding-left: 3px;
+  background-color: #3facff;
   border-radius: 10px;
   display: flexbox;
   align-items: center;
