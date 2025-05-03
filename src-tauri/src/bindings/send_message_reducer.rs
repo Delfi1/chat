@@ -8,11 +8,15 @@ use spacetimedb_sdk::__codegen::{self as __sdk, __lib, __sats, __ws};
 #[sats(crate = __lib)]
 pub(super) struct SendMessageArgs {
     pub text: String,
+    pub reply: Option<u32>,
 }
 
 impl From<SendMessageArgs> for super::Reducer {
     fn from(args: SendMessageArgs) -> Self {
-        Self::SendMessage { text: args.text }
+        Self::SendMessage {
+            text: args.text,
+            reply: args.reply,
+        }
     }
 }
 
@@ -32,7 +36,7 @@ pub trait send_message {
     /// This method returns immediately, and errors only if we are unable to send the request.
     /// The reducer will run asynchronously in the future,
     ///  and its status can be observed by listening for [`Self::on_send_message`] callbacks.
-    fn send_message(&self, text: String) -> __sdk::Result<()>;
+    fn send_message(&self, text: String, reply: Option<u32>) -> __sdk::Result<()>;
     /// Register a callback to run whenever we are notified of an invocation of the reducer `send_message`.
     ///
     /// Callbacks should inspect the [`__sdk::ReducerEvent`] contained in the [`super::ReducerEventContext`]
@@ -42,7 +46,7 @@ pub trait send_message {
     /// to cancel the callback.
     fn on_send_message(
         &self,
-        callback: impl FnMut(&super::ReducerEventContext, &String) + Send + 'static,
+        callback: impl FnMut(&super::ReducerEventContext, &String, &Option<u32>) + Send + 'static,
     ) -> SendMessageCallbackId;
     /// Cancel a callback previously registered by [`Self::on_send_message`],
     /// causing it not to run in the future.
@@ -50,13 +54,13 @@ pub trait send_message {
 }
 
 impl send_message for super::RemoteReducers {
-    fn send_message(&self, text: String) -> __sdk::Result<()> {
+    fn send_message(&self, text: String, reply: Option<u32>) -> __sdk::Result<()> {
         self.imp
-            .call_reducer("send_message", SendMessageArgs { text })
+            .call_reducer("send_message", SendMessageArgs { text, reply })
     }
     fn on_send_message(
         &self,
-        mut callback: impl FnMut(&super::ReducerEventContext, &String) + Send + 'static,
+        mut callback: impl FnMut(&super::ReducerEventContext, &String, &Option<u32>) + Send + 'static,
     ) -> SendMessageCallbackId {
         SendMessageCallbackId(self.imp.on_reducer(
             "send_message",
@@ -64,7 +68,7 @@ impl send_message for super::RemoteReducers {
                 let super::ReducerEventContext {
                     event:
                         __sdk::ReducerEvent {
-                            reducer: super::Reducer::SendMessage { text },
+                            reducer: super::Reducer::SendMessage { text, reply },
                             ..
                         },
                     ..
@@ -72,7 +76,7 @@ impl send_message for super::RemoteReducers {
                 else {
                     unreachable!()
                 };
-                callback(ctx, text)
+                callback(ctx, text, reply)
             }),
         ))
     }

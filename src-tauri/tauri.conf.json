@@ -37,7 +37,7 @@
     "updater": {
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IENDMTUyMkI0NTBENjI0NzYKUldSMkpOWlF0Q0lWekt4a3hyZ3pkVENFeHBJYzFPdzZSODhXNndodnh3WHhjcUlqVEhua1JzOHIK",
       "endpoints": [
-        "https://github.com/user/repo/releases/latest/download/latest.json"
+        "https://github.com/Delfi1/chat/releases/latest/download/latest.json"
       ]
     }
   }

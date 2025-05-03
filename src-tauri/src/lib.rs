@@ -24,15 +24,18 @@ async fn update(app: tauri::AppHandle) -> tauri_plugin_updater::Result<()> {
     if let Some(update) = app.updater()?.check().await? {
         let mut downloaded = 0;
         // alternatively we could also call update.download() and update.install() separately
-        update.download_and_install(
-            |chunk_length, content_length| {
-                downloaded += chunk_length;
-                println!("downloaded {downloaded} from {content_length:?}");
-            }, || {
-                println!("download finished");
-            },
-        ).await?;
-        
+        update
+            .download_and_install(
+                |chunk_length, content_length| {
+                    downloaded += chunk_length;
+                    println!("downloaded {downloaded} from {content_length:?}");
+                },
+                || {
+                    println!("download finished");
+                },
+            )
+            .await?;
+
         println!("update installed");
         app.restart();
     }
@@ -294,7 +297,7 @@ fn connect(
     // Clear connect handler and join;
     if let Some(handler) = connect_handler.lock().unwrap().0.take() {
         match handler.join() {
-            _ => ()
+            _ => (),
         }
     }
 
@@ -350,14 +353,14 @@ fn signup(name: String, password: String, session: State<SessionState>) {
 }
 
 #[tauri::command]
-fn send_message(text: String, session: State<SessionState>) {
+fn send_message(text: String, reply: Option<u32>, session: State<SessionState>) {
     let Some(connection) = &session.lock().unwrap().connection else {
         return;
     };
 
     connection
         .reducers
-        .send_message(text)
+        .send_message(text, reply)
         .expect("Spacetime error");
 }
 
@@ -395,12 +398,22 @@ fn get_users(session: State<SessionState>) -> Vec<UserPayload> {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    let app = tauri::Builder::default()
+    let mut builder = tauri::Builder::default();
+    #[cfg(desktop)]
+    {
+        builder = builder.plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            let _ = app.get_webview_window("main")
+                .expect("no main window")
+                .set_focus();
+        }));
+    }
+        
+    let app = builder
         .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(|app| {
             let handle = app.handle().clone();
             tauri::async_runtime::spawn(async move {
-              update(handle).await.unwrap();
+                update(handle).await.unwrap();
             });
             Ok(())
         })
