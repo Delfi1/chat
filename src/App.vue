@@ -3,6 +3,7 @@ import { Window, LogicalSize } from '@tauri-apps/api/window';
 import { onBeforeMount, ref } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
+import 'primeicons/primeicons.css'
 
 import ConnectPage from './ConnectPage.vue';
 import AuthPage from './AuthPage.vue';
@@ -16,7 +17,7 @@ const connecting = ref(false);
 const loginErrorMsg = ref('')
 const connectErrorMsg = ref('');
 
-const user = ref<UserPayload>();
+const self = ref<UserPayload>();
 const users = ref([] as UserPayload[]);
 
 const messages_len = ref(0);
@@ -39,11 +40,7 @@ function logout() {
   invoke('logout');
   console.log("Logout");
   loginned.value = false;
-  user.value = undefined;
-}
-
-function send_message(text: string) {
-  invoke('send_message', { "text": text } );
+  self.value = undefined;
 }
 
 function update_lists() {
@@ -85,7 +82,7 @@ function connect_state() {
 
   connected.value = false;
   loginned.value = false;
-  user.value = undefined;
+  self.value = undefined;
   users.value = [];
   messages.value = [];
 }
@@ -130,9 +127,17 @@ onBeforeMount(() => {
   // Loginned User is inserted
   listen<UserPayload>('loginned', (ev) => {
     loginned.value = true;
-    user.value = ev.payload;
+    self.value = ev.payload;
     loginErrorMsg.value = '';
 
+    update_lists();
+  });
+
+  listen('user_removed', (_ev) => {
+    update_lists();
+  });
+
+  listen('message_removed', (_ev) => {
     update_lists();
   });
 
@@ -145,7 +150,7 @@ onBeforeMount(() => {
 <div class="main">
   <ConnectPage :connecting="connecting" :connected="connected" :errorMsg="connectErrorMsg" @on_connect="connect" v-if="!connected"></ConnectPage>
   <AuthPage v-if="connected && !loginned" :error-msg="loginErrorMsg" @onLogin="login" @onSignup="signup"></AuthPage>
-  <MainPage v-if="connected && loginned" @send_message="send_message" @logout="logout" :user="user" :messages="messages" :users="users"></MainPage>
+  <MainPage v-if="connected && loginned" @logout="logout" :self="self" :messages="messages" :users="users"></MainPage>
 </div>
 </template>
 
