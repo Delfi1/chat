@@ -20,6 +20,7 @@ pub struct User {
     #[primary_key]
     #[auto_inc]
     id: u32,
+    admin: bool,
     #[unique]
     name: String,
     online: Vec<Identity>,
@@ -32,6 +33,7 @@ pub struct Message {
     #[auto_inc]
     id: u32,
     sender: u32,
+    reply: Option<u32>,
     sent: Timestamp,
     text: String,
 }
@@ -54,7 +56,7 @@ pub fn signup(ctx: &ReducerContext, name: String, password: String) -> Result<()
         return Err("User with this name is already exists".to_string());
     };
 
-    let user = ctx.db.user().insert(User { id: 0, name, online: vec![ctx.sender] });
+    let user = ctx.db.user().insert(User { id: 0, name, online: vec![ctx.sender], admin: false });
     ctx.db.credentials().insert( UserCredentials { user_id: user.id, password, connections: vec![ctx.sender] });
 
     Ok(())
@@ -96,7 +98,7 @@ pub fn logout(ctx: &ReducerContext) -> Result<(), String> {
 }
 
 #[reducer]
-pub fn send_message(ctx: &ReducerContext, text: String) -> Result<(), String> {
+pub fn send_message(ctx: &ReducerContext, text: String, reply: Option<u32>) -> Result<(), String> {
     let text = text.trim().to_string();
     let Some(creds) = get_creds(ctx) else {
         return Err("Not loginned in".to_string());
@@ -110,9 +112,28 @@ pub fn send_message(ctx: &ReducerContext, text: String) -> Result<(), String> {
         id: 0,
         sender: creds.user_id,
         sent: ctx.timestamp,
+        reply,
         text
     });
 
+    Ok(())
+}
+
+#[reducer]
+pub fn delete_message(ctx: &ReducerContext, id: u32) -> Result<(), String> {
+    let Some(creds) = get_creds(ctx) else {
+        return Err("You are not logged in".to_string());
+    };
+    let user = ctx.db.user().id().find(creds.user_id).unwrap();
+    let Some(message) = ctx.db.message().id().find(id) else {
+        return Err("Message not found".to_string());
+    };
+    
+    if !(user.id == message.sender || user.admin) {
+        return Err("Permission denied".to_string());
+    }
+
+    ctx.db.message().id().delete(id);
     Ok(())
 }
 

@@ -9,6 +9,7 @@ use spacetimedb_sdk::__codegen::{self as __sdk, __lib, __sats, __ws};
 pub struct Message {
     pub id: u32,
     pub sender: u32,
+    pub reply: Option<u32>,
     pub sent: __sdk::Timestamp,
     pub text: String,
 }

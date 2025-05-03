@@ -7,6 +7,7 @@ use spacetimedb_sdk::__codegen::{self as __sdk, __lib, __sats, __ws};
 pub mod client_connected_reducer;
 pub mod client_disconnected_reducer;
 pub mod credentials_table;
+pub mod delete_message_reducer;
 pub mod login_reducer;
 pub mod logout_reducer;
 pub mod message_table;
@@ -24,6 +25,9 @@ pub use client_disconnected_reducer::{
     client_disconnected, set_flags_for_client_disconnected, ClientDisconnectedCallbackId,
 };
 pub use credentials_table::*;
+pub use delete_message_reducer::{
+    delete_message, set_flags_for_delete_message, DeleteMessageCallbackId,
+};
 pub use login_reducer::{login, set_flags_for_login, LoginCallbackId};
 pub use logout_reducer::{logout, set_flags_for_logout, LogoutCallbackId};
 pub use message_table::*;
@@ -44,9 +48,10 @@ pub use user_type::User;
 pub enum Reducer {
     ClientConnected,
     ClientDisconnected,
+    DeleteMessage { id: u32 },
     Login { name: String, password: String },
     Logout,
-    SendMessage { text: String },
+    SendMessage { text: String, reply: Option<u32> },
     Signup { name: String, password: String },
 }
 
@@ -59,6 +64,7 @@ impl __sdk::Reducer for Reducer {
         match self {
             Reducer::ClientConnected => "client_connected",
             Reducer::ClientDisconnected => "client_disconnected",
+            Reducer::DeleteMessage { .. } => "delete_message",
             Reducer::Login { .. } => "login",
             Reducer::Logout => "logout",
             Reducer::SendMessage { .. } => "send_message",
@@ -77,6 +83,10 @@ impl TryFrom<__ws::ReducerCallInfo<__ws::BsatnFormat>> for Reducer {
             "client_disconnected" => Ok(__sdk::parse_reducer_args::<
                 client_disconnected_reducer::ClientDisconnectedArgs,
             >("client_disconnected", &value.args)?
+            .into()),
+            "delete_message" => Ok(__sdk::parse_reducer_args::<
+                delete_message_reducer::DeleteMessageArgs,
+            >("delete_message", &value.args)?
             .into()),
             "login" => Ok(__sdk::parse_reducer_args::<login_reducer::LoginArgs>(
                 "login",

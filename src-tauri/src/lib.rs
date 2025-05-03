@@ -353,14 +353,14 @@ fn signup(name: String, password: String, session: State<SessionState>) {
 }
 
 #[tauri::command]
-fn send_message(text: String, session: State<SessionState>) {
+fn send_message(text: String, reply: Option<u32>, session: State<SessionState>) {
     let Some(connection) = &session.lock().unwrap().connection else {
         return;
     };
 
     connection
         .reducers
-        .send_message(text)
+        .send_message(text, reply)
         .expect("Spacetime error");
 }
 

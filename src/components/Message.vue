@@ -8,11 +8,17 @@
   }>();
   const emit = defineEmits(['on_edit']);
 
-
   // time formatter
   function time(unix: number): string {
     var date = new Date(unix);
-    return date.toLocaleTimeString();
+    var current = new Date();
+
+    // if today
+    if (current.toLocaleDateString() == date.toLocaleDateString()) {
+      return date.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })
+    }
+    
+    return date.toLocaleDateString()
   }
 </script>
 
