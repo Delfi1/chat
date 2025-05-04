@@ -3,7 +3,7 @@ import { Window, LogicalSize } from '@tauri-apps/api/window';
 import { onBeforeMount, ref } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
-
+import { LazyStore } from '@tauri-apps/plugin-store';
 import 'primeicons/primeicons.css'
 
 import ConnectPage from './ConnectPage.vue';
@@ -23,10 +23,13 @@ const users = ref([] as UserPayload[]);
 
 const messages_len = ref(0);
 const messages = ref([] as MessagePayload[]);
+const store = new LazyStore('user.json');
 
 function connect(addr: string) {
   invoke('connect', {"addr": addr});
+  store.set('addr', addr);
   connecting.value = true;
+  console.log("connect");
 }
 
 function login(name: string, password: string) {
@@ -44,6 +47,13 @@ function logout() {
   self.value = undefined;
 }
 
+function scroll_area() {
+  var area = document.getElementById("messages-area") as HTMLElement;
+  if (area.scrollTo) {
+    area.scrollTo(0, area.scrollHeight);
+  }
+}
+
 function update_lists() {
   invoke<UserPayload[]>('get_users').then((result) => {
     users.value = result;
@@ -51,14 +61,12 @@ function update_lists() {
 
   invoke<MessagePayload[]>('get_messages', {"start": 0, "end": 10000}).then((result) => {
     messages.value = result;
-    var area = document.getElementById("messages-area") as HTMLElement;
-    area.scrollTo(0, area.scrollHeight);
+    scroll_area();
   });
 
   invoke<number>('messages_len').then((result) => {
     messages_len.value = result;
-    var area = document.getElementById("messages-area") as HTMLElement;
-    area.scrollTo(0, area.scrollHeight);
+    scroll_area();
   });
 }
 
@@ -75,8 +83,8 @@ function main_state() {
 }
 
 function load_connect() {
-  invoke<string | null>('load_addr').then((result) => {
-    if (result) { connect(result) };
+  store.get<string>('addr').then((addr) => {
+    if (addr) { connect(addr) };
   });
 }
 

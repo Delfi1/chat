@@ -1,8 +1,6 @@
 use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, Emitter, Manager, RunEvent, State};
 use tauri_plugin_updater::UpdaterExt;
-use home::home_dir;
-use std::path::*;
 
 mod bindings;
 use bindings::*;
@@ -11,44 +9,6 @@ use spacetimedb_sdk::*;
 /// STDB connection consts
 const ADDR: &str = "localhost";
 const DB_NAME: &str = "chat";
-
-/// Store server ip address
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub struct StoredAddress {
-    pub addr: String
-}
-
-impl StoredAddress {
-    const HOME: &str = ".delfi-chat";
-
-    pub fn ensure_create_dir() {
-        let mut path = home_dir().expect("Home dir not found");
-        path.push(Self::HOME);
-        std::fs::create_dir_all(&path).expect("Path error");
-    }
-
-    fn path() -> PathBuf {
-        let mut path = home_dir().expect("Home dir not found");
-        path.push(Self::HOME);
-        path.push("addres");
-        
-        return path;
-    }
-
-    pub fn save(addr: impl Into<String>) {
-        Self::ensure_create_dir();
-
-        let creds = serde_json::to_vec(&StoredAddress { addr: addr.into() }).expect("Serialize error");
-        std::fs::write(&Self::path(), creds).expect("Store error");
-    }
-
-    pub fn load() -> Option<Self> {
-        let path = Self::path();
-
-        std::fs::read(&path).ok().and_then(|bytes| 
-            Some(serde_json::from_slice(&bytes).expect("Deserialize error")))
-    }
-}
 
 /// Get server Uri from address
 fn get_uri(addr: String) -> String {
@@ -151,7 +111,7 @@ impl SessionInner {
 
     pub fn on_connect(&mut self, identity: Identity) {
         self.identity = Some(identity);
-        
+
         self.app.emit("on_connect", ()).expect("Emit error");
     }
 
@@ -306,12 +266,10 @@ fn try_connect(addr: Option<String>, session: SessionState) {
     let addr = addr.unwrap_or(ADDR.to_string());
     let uri = get_uri(addr.clone());
     let token_addr = addr.clone();
-    let write_addr = addr.clone();
     let res = DbConnection::builder()
         .on_connect(move |_ctx, identity, token| {
             on_connect_inner.lock().unwrap().on_connect(identity);
             println!("Connected!");
-            StoredAddress::save(write_addr);
 
             if let Err(e) = creds_store(addr).save(token) {
                 eprintln!("Failed to save credentials: {:?}", e);
@@ -424,7 +382,7 @@ fn send_message(text: String, reply: Option<u32>, session: State<SessionState>) 
 
     connection
         .reducers
-        .send_message(text, reply)
+        .send_message(text, reply, Vec::new())
         .expect("Spacetime error");
 }
 
@@ -438,11 +396,6 @@ fn remove_message(id: u32, session: State<SessionState>) {
         .reducers
         .remove_message(id)
         .expect("Spacetime error");
-}
-
-#[tauri::command]
-fn load_addr() -> Option<String> {
-    StoredAddress::load().and_then(|s| Some(s.addr))
 }
 
 #[tauri::command]
@@ -483,7 +436,8 @@ pub fn run() {
     #[cfg(desktop)]
     {
         builder = builder.plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
-            let _ = app.get_webview_window("main")
+            let _ = app
+                .get_webview_window("main")
                 .expect("no main window")
                 .set_focus();
         }));
@@ -491,6 +445,7 @@ pub fn run() {
 
     let app = builder
         .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_store::Builder::new().build())
         .setup(|app| {
             let handle = app.handle().clone();
             tauri::async_runtime::spawn(async move {
@@ -503,7 +458,6 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             connect,
             disconnect,
-            load_addr,
             signup,
             login,
             logout,

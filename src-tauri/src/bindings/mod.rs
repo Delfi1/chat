@@ -7,6 +7,8 @@ use spacetimedb_sdk::__codegen::{self as __sdk, __lib, __sats, __ws};
 pub mod client_connected_reducer;
 pub mod client_disconnected_reducer;
 pub mod credentials_table;
+pub mod file_table;
+pub mod file_type;
 pub mod login_reducer;
 pub mod logout_reducer;
 pub mod message_table;
@@ -25,6 +27,8 @@ pub use client_disconnected_reducer::{
     client_disconnected, set_flags_for_client_disconnected, ClientDisconnectedCallbackId,
 };
 pub use credentials_table::*;
+pub use file_table::*;
+pub use file_type::File;
 pub use login_reducer::{login, set_flags_for_login, LoginCallbackId};
 pub use logout_reducer::{logout, set_flags_for_logout, LogoutCallbackId};
 pub use message_table::*;
@@ -48,11 +52,23 @@ pub use user_type::User;
 pub enum Reducer {
     ClientConnected,
     ClientDisconnected,
-    Login { name: String, password: String },
+    Login {
+        name: String,
+        password: String,
+    },
     Logout,
-    RemoveMessage { id: u32 },
-    SendMessage { text: String, reply: Option<u32> },
-    Signup { name: String, password: String },
+    RemoveMessage {
+        id: u32,
+    },
+    SendMessage {
+        text: String,
+        reply: Option<u32>,
+        files: Vec<u32>,
+    },
+    Signup {
+        name: String,
+        password: String,
+    },
 }
 
 impl __sdk::InModule for Reducer {
@@ -125,6 +141,7 @@ impl TryFrom<__ws::ReducerCallInfo<__ws::BsatnFormat>> for Reducer {
 #[doc(hidden)]
 pub struct DbUpdate {
     credentials: __sdk::TableUpdate<UserCredentials>,
+    file: __sdk::TableUpdate<File>,
     message: __sdk::TableUpdate<Message>,
     user: __sdk::TableUpdate<User>,
 }
@@ -138,6 +155,7 @@ impl TryFrom<__ws::DatabaseUpdate<__ws::BsatnFormat>> for DbUpdate {
                 "credentials" => {
                     db_update.credentials = credentials_table::parse_table_update(table_update)?
                 }
+                "file" => db_update.file = file_table::parse_table_update(table_update)?,
                 "message" => db_update.message = message_table::parse_table_update(table_update)?,
                 "user" => db_update.user = user_table::parse_table_update(table_update)?,
 
@@ -169,6 +187,9 @@ impl __sdk::DbUpdate for DbUpdate {
         diff.credentials = cache
             .apply_diff_to_table::<UserCredentials>("credentials", &self.credentials)
             .with_updates_by_pk(|row| &row.user_id);
+        diff.file = cache
+            .apply_diff_to_table::<File>("file", &self.file)
+            .with_updates_by_pk(|row| &row.id);
         diff.message = cache
             .apply_diff_to_table::<Message>("message", &self.message)
             .with_updates_by_pk(|row| &row.id);
@@ -185,6 +206,7 @@ impl __sdk::DbUpdate for DbUpdate {
 #[doc(hidden)]
 pub struct AppliedDiff<'r> {
     credentials: __sdk::TableAppliedDiff<'r, UserCredentials>,
+    file: __sdk::TableAppliedDiff<'r, File>,
     message: __sdk::TableAppliedDiff<'r, Message>,
     user: __sdk::TableAppliedDiff<'r, User>,
 }
@@ -204,6 +226,7 @@ impl<'r> __sdk::AppliedDiff<'r> for AppliedDiff<'r> {
             &self.credentials,
             event,
         );
+        callbacks.invoke_table_row_callbacks::<File>("file", &self.file, event);
         callbacks.invoke_table_row_callbacks::<Message>("message", &self.message, event);
         callbacks.invoke_table_row_callbacks::<User>("user", &self.user, event);
     }
@@ -782,6 +805,7 @@ impl __sdk::SpacetimeModule for RemoteModule {
 
     fn register_tables(client_cache: &mut __sdk::ClientCache<Self>) {
         credentials_table::register_table(client_cache);
+        file_table::register_table(client_cache);
         message_table::register_table(client_cache);
         user_table::register_table(client_cache);
     }

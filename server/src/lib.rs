@@ -36,6 +36,19 @@ pub struct Message {
     reply: Option<u32>,
     sent: Timestamp,
     text: String,
+    // May be 5 file at same time on message
+    
+    files: Vec<u32>
+}
+
+/// Raw file table with name
+#[table(name=file, public)]
+pub struct File {
+    #[auto_inc]
+    #[primary_key]
+    id: u32,
+    name: String,
+    data: Vec<u8>
 }
 
 #[reducer]
@@ -82,14 +95,6 @@ pub fn login(ctx: &ReducerContext, name: String, password: String) -> Result<(),
     Ok(())
 }
 
-#[table(name=view)]
-pub struct ViewAccess {
-    #[unique]
-    identity: Identity,
-    // message id
-    id: u32
-}
-
 #[reducer]
 pub fn logout(ctx: &ReducerContext) -> Result<(), String> {
     let Some(mut creds) = get_creds(ctx) else {
@@ -106,7 +111,8 @@ pub fn logout(ctx: &ReducerContext) -> Result<(), String> {
 }
 
 #[reducer]
-pub fn send_message(ctx: &ReducerContext, text: String, reply: Option<u32>) -> Result<(), String> {
+// todo: files limit
+pub fn send_message(ctx: &ReducerContext, text: String, reply: Option<u32>, files: Vec<u32>) -> Result<(), String> {
     let text = text.trim().to_string();
     let Some(creds) = get_creds(ctx) else {
         return Err("Not loginned in".to_string());
@@ -121,7 +127,8 @@ pub fn send_message(ctx: &ReducerContext, text: String, reply: Option<u32>) -> R
         sender: creds.user_id,
         sent: ctx.timestamp,
         reply,
-        text
+        text,
+        files
     });
 
     Ok(())
@@ -142,6 +149,15 @@ pub fn remove_message(ctx: &ReducerContext, id: u32) -> Result<(), String> {
     }
 
     ctx.db.message().id().delete(id);
+    Ok(())
+}
+
+pub fn upload_file(ctx: &ReducerContext, name: String, data: Vec<u8>) -> Result<(), String> {
+    if get_creds(ctx).is_none() {
+        return Err("You are not logged in".to_string());
+    };
+
+    ctx.db.file().insert(File { id: 0, name, data });
     Ok(())
 }
 

@@ -70,6 +70,7 @@
     background-color: #2e343d;
     clear: both;
     line-height: 18px;
+    min-width: 80px;
     font-size: 15px;
     padding: 8px;
     position: relative;

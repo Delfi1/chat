@@ -61,7 +61,7 @@ function remove(id: number) {
     <div class="central-box">
       <div v-if="page == Pages.chat" class="chat-page">
         <div class="chat-box">
-          <div class="messages-box">
+          <div class="messages-box" id="messages-area">
             <Message v-for="message in props.messages" :self="self" :user="sender(props.users, message)" :payload="message" @remove="remove"></Message>
           </div>
           <div class="input-box">
@@ -199,6 +199,8 @@ function remove(id: number) {
   height: 80%;
   width: 80%;
   background-color: transparent;
+  outline: none;
+  border: none;
 
   margin-left: 25px;
   font-size: 16px;
