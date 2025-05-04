@@ -55,10 +55,14 @@
 </script>
 
 <template>
-  <div v-if="!is_owner()" class="message received">
-    <div @click="on_click" v-html="marked(props.payload.text)" class="text"></div>
-    <div class="time" v-text="time()"></div>
+  <div v-if="!is_owner()" class="message-container received">
+    <div class="avatar"></div>
+    <div class="message received">
+      <div @click="on_click" v-html="marked(props.payload.text)" class="text"></div>
+      <div class="time" v-text="time()"></div>
+    </div>
   </div>
+  
   <div v-if="is_owner()" class="message sent">
     <div @click="on_click" v-html="marked(props.payload.text)" class="text"></div>
     <div class="time" v-text="time()"></div>
@@ -66,6 +70,24 @@
 </template>
 
 <style>
+  .avatar {
+    width: 40px;
+    height: 40px;
+    background-color: #6b8afd;
+  }
+
+  .message-container {
+    display: flex;
+  }
+
+  .message-container.received {
+    margin-left: 10px;
+  }
+
+  .message-container.received .avatar {
+    margin-right: 5px;
+  }
+
   .message {
     background-color: #2e343d;
     clear: both;
@@ -75,7 +97,7 @@
     padding: 8px;
     position: relative;
     margin: 8px 0;
-    max-width: 75%;
+    max-width: 60%;
     white-space: initial;
     overflow-wrap: anywhere;
     z-index: 1;
@@ -98,8 +120,8 @@
     text-align: end;
   }
 
-  .message:first-child {
-    margin: 16px 0 8px;
+  .message-container:first-child {
+    margin-top: 10px;
   }
 
   .message:last-child {

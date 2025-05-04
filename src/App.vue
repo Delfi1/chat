@@ -74,8 +74,8 @@ function main_state() {
   appWindow.setResizable(true);
   appWindow.setMaximizable(true);
   appWindow.setMaxSize(undefined);
-  appWindow.setMinSize(new LogicalSize(900, 600));
-  appWindow.setSize(new LogicalSize(900, 600));
+  appWindow.setMinSize(new LogicalSize(1100, 600));
+  appWindow.setSize(new LogicalSize(1100, 600));
 
   connected.value = true;
   connecting.value = false;

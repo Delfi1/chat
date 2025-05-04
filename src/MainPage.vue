@@ -73,7 +73,7 @@ function remove(id: number) {
       </div>
 
       <div v-if="page == Pages.account" class="account-page">
-
+        <button @click="emit('logout')">Logout</button>
       </div>
 
       <div v-if="page == Pages.settings" class="settings-page">
@@ -221,6 +221,13 @@ function remove(id: number) {
   height: 100%;
   width: 300px;
   right: 0;
+}
+
+.account-page button {
+  width: 60px;
+  height: 25px;
+  margin: 10px;
+  background-color: #202329;
 }
 
 </style>
