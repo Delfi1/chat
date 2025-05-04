@@ -7,12 +7,14 @@ use spacetimedb_sdk::__codegen::{self as __sdk, __lib, __sats, __ws};
 pub mod client_connected_reducer;
 pub mod client_disconnected_reducer;
 pub mod credentials_table;
+pub mod file_ref_type;
 pub mod file_table;
 pub mod file_type;
 pub mod login_reducer;
 pub mod logout_reducer;
 pub mod message_table;
 pub mod message_type;
+pub mod raw_file_type;
 pub mod remove_message_reducer;
 pub mod send_message_reducer;
 pub mod signup_reducer;
@@ -27,12 +29,14 @@ pub use client_disconnected_reducer::{
     client_disconnected, set_flags_for_client_disconnected, ClientDisconnectedCallbackId,
 };
 pub use credentials_table::*;
+pub use file_ref_type::FileRef;
 pub use file_table::*;
 pub use file_type::File;
 pub use login_reducer::{login, set_flags_for_login, LoginCallbackId};
 pub use logout_reducer::{logout, set_flags_for_logout, LogoutCallbackId};
 pub use message_table::*;
 pub use message_type::Message;
+pub use raw_file_type::RawFile;
 pub use remove_message_reducer::{
     remove_message, set_flags_for_remove_message, RemoveMessageCallbackId,
 };
@@ -63,7 +67,7 @@ pub enum Reducer {
     SendMessage {
         text: String,
         reply: Option<u32>,
-        files: Vec<u32>,
+        files: Vec<RawFile>,
     },
     Signup {
         name: String,

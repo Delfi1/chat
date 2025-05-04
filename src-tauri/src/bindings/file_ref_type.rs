@@ -4,19 +4,13 @@
 #![allow(unused, clippy::all)]
 use spacetimedb_sdk::__codegen::{self as __sdk, __lib, __sats, __ws};
 
-use super::file_ref_type::FileRef;
-
 #[derive(__lib::ser::Serialize, __lib::de::Deserialize, Clone, PartialEq, Debug)]
 #[sats(crate = __lib)]
-pub struct Message {
+pub struct FileRef {
     pub id: u32,
-    pub sender: u32,
-    pub reply: Option<u32>,
-    pub sent: __sdk::Timestamp,
-    pub text: String,
-    pub files: Vec<FileRef>,
+    pub name: String,
 }
 
-impl __sdk::InModule for Message {
+impl __sdk::InModule for FileRef {
     type Module = super::RemoteModule;
 }

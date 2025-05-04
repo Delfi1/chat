@@ -37,8 +37,7 @@ pub struct Message {
     sent: Timestamp,
     text: String,
     // May be 5 file at same time on message
-    
-    files: Vec<u32>
+    files: Vec<FileRef>
 }
 
 /// Raw file table with name
@@ -49,6 +48,31 @@ pub struct File {
     id: u32,
     name: String,
     data: Vec<u8>
+}
+
+#[derive(SpacetimeType)]
+// File raw data for store
+pub struct RawFile {
+    name: String,
+    data: Vec<u8>
+}
+
+#[derive(SpacetimeType)]
+pub struct FileRef {
+    pub id: u32,
+    pub name: String
+}
+
+impl FileRef {
+    pub fn new(ctx: &ReducerContext, raw: RawFile) -> Self {
+        let file = ctx.db.file().insert(File {
+            id: 0,
+            name: raw.name,
+            data: raw.data
+        });
+
+        Self { id: file.id, name: file.name }
+    }
 }
 
 #[reducer]
@@ -112,7 +136,7 @@ pub fn logout(ctx: &ReducerContext) -> Result<(), String> {
 
 #[reducer]
 // todo: files limit
-pub fn send_message(ctx: &ReducerContext, text: String, reply: Option<u32>, files: Vec<u32>) -> Result<(), String> {
+pub fn send_message(ctx: &ReducerContext, text: String, reply: Option<u32>, files: Vec<RawFile>) -> Result<(), String> {
     let text = text.trim().to_string();
     let Some(creds) = get_creds(ctx) else {
         return Err("Not loginned in".to_string());
@@ -122,6 +146,7 @@ pub fn send_message(ctx: &ReducerContext, text: String, reply: Option<u32>, file
         return Err("Empty message".to_string());
     }
 
+    let files = files.into_iter().map(|raw| { FileRef::new(ctx, raw) }).collect();
     ctx.db.message().insert(Message {
         id: 0,
         sender: creds.user_id,
