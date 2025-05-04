@@ -2,7 +2,7 @@
 import { ref } from 'vue';
 import { UserPayload, MessagePayload, sender } from './api';
 import Message from './components/Message.vue';
-import User from './components/User.vue';
+//import User from './components/User.vue';
 import { invoke } from '@tauri-apps/api/core';
 
 const props = defineProps<{
@@ -11,8 +11,15 @@ const props = defineProps<{
   messages: MessagePayload[]
 }>();
 const emit = defineEmits(['logout']);
-const text = ref('');
 
+const Pages = {
+  chat: 'chat',
+  account: 'account',
+  settings: 'settings'
+};
+const page = ref(Pages.chat);
+
+const text = ref('');
 function send() {
   invoke('send_message', { "text": text.value } );
   text.value = '';
@@ -22,34 +29,55 @@ function remove(id: number) {
   invoke('remove_message', { "id": id });
 }
 
-function all_online(): UserPayload[] {
-  return props.users.filter((u) => u.online);
-}
 </script>
 
 <template>
   <div class="container">
-    <div class="control-box">
-      <div class="main-controls">
-        <button @click="emit('logout')">Logout</button>
+    <div class="left-menu">
+      <div class="logo">
+        <h1>De</h1>
       </div>
-      <div class="users-list">
-        <h2>Online users: {{ all_online().length }}</h2>
-        <User v-for="user in all_online()" :payload="user"></User>
+      <div class="menu-buttons">
+        <div class="top">
+          <div class="menu-btn">
+            <button @click="page = Pages.chat"><i class="pi pi-comments"></i></button>
+            <p>Chat</p>
+          </div>
+
+          <div class="menu-btn">
+            <button @click="page = Pages.account"><i class="pi pi-user"></i></button>
+            <p>Account</p>
+          </div>
+        </div>
+        <div class="bottom">
+          <div class="menu-btn">
+            <button @click="page = Pages.settings"><i class="pi pi-cog"></i></button>
+            <p>Settings</p>
+          </div>
+        </div>
       </div>
     </div>
-
-    <div class="main-box">
-      <div class="messages-box" id="messages-area">
-        <Message v-for="message in props.messages" :self="self" :user="sender(props.users, message)" :payload="message" @remove="remove"></Message>
-      </div>
-      <div class="input-panel">
-        <div class="input-box">
-          <div class="line-box">
-            <input v-model="text" placeholder="Send message" v-on:keyup.enter="send" />
+    
+    <div class="central-box">
+      <div v-if="page == Pages.chat" class="chat-page">
+        <div class="chat-box">
+          <div class="messages-box">
+            <Message v-for="message in props.messages" :self="self" :user="sender(props.users, message)" :payload="message" @remove="remove"></Message>
+          </div>
+          <div class="input-box">
+            <input placeholder="Send message" v-model="text" v-on:keyup.enter="send"/>
             <button @click="send">Send</button>
           </div>
         </div>
+        <div class="details"></div>
+      </div>
+
+      <div v-if="page == Pages.account" class="account-page">
+
+      </div>
+
+      <div v-if="page == Pages.settings" class="settings-page">
+      
       </div>
     </div>
   </div>
@@ -62,111 +90,135 @@ function all_online(): UserPayload[] {
   display: flex;
 }
 
-.container button {
-  background-color: #0091ff;
-  margin: 4px;
-  transition: all 0.4s ease-in-out;
-  transition-property: color, background-color;
-  color: #080710;
-  border: none;
-  border-radius: 5px;
-  cursor: pointer;
-}
-
-.container button:hover {
-  background-color: #0065b1;
-  color: #fff;
-}
-
-.control-box {
+.left-menu {
+  width: 80px;
   height: 100%;
-  flex: 0.3;
-  margin-left: 10px;
-  margin-right: 10px;
   display: inline;
 }
 
-.control-box button {
+.left-menu .logo {
   margin: 10px;
-  padding: 5px;
+  width: 55px;
+  height: 55px;
+  border-radius: 12px;
+  display: grid;
+  align-content: center;
 }
 
-.main-controls {
-  width: 100%;
-  height: 25%;
-
-  position: relative;
-  width: 100%;
-  top: 1.5%;
-
-  border-radius: 4px;
-  background-color: #62bbff;
+.left-menu .logo h1 {
+  font-weight: 500;
+  text-align: center;
+  transition: all 0.6s ease;
 }
 
-.users-list {
-  position: relative;
-  width: 100%;
-  height: 70%;
-  top: 2.5%;
-  padding: 5px;
-  border-radius: 4px;
-  background-color: #87cbff;
+.left-menu .logo h1:hover {
+  font-weight: 600;
+  font-size: x-large;
+  color: #6b8afd;
 }
 
-/* Main part */
-.main-box {
+.left-menu .menu-buttons {
+  margin-top: 10px;
+  width: 100%;
+}
+
+.menu-buttons .menu-btn {
   height: 100%;
-  display: inline;
-  flex: 1;
+  align-content: center;
+  text-align: center;
+  font-size: 12px;
+}
+
+.menu-buttons .bottom {
+  position: absolute;
+  bottom: 0;
+}
+
+.menu-buttons .menu-btn {
+  margin: 15px;
+}
+
+.menu-btn button {
+  width: 45px;
+  height: 45px;
+  background-color: transparent;
+  outline: none;
+  border: none;
+  border-radius: 12px;
+}
+
+.menu-btn button i {
+  font-size: 1.4rem;
+  transition: all 0.3s ease;
+}
+
+.menu-btn button i:hover {
+  font-size: 1.3rem;
+  color: #6b8afd;
+}
+
+.menu-btn button i:active {
+  color: #587cff;
+  font-size: 1.1rem
+}
+
+.central-box {
+  width: 100%;
+  height: 100%;
+}
+
+.chat-page {
+  width: 100%;
+  height: 100%;
+  display: flex;
+}
+
+/* Chat page Central panel, chat */
+.chat-box {
+  height: 100%;
+  width: 100%;
+  border-radius: 16px;
+  background-color: #202329;
+  display: flex;
+  flex-flow: column;
 }
 
 .messages-box {
   width: 100%;
-
-  height: 90%;
+  height: 100%;
   overflow-y: scroll;
 }
 
-.input-panel {
-  width: 100%;
-  height: 8%;
-  display: grid;
-  place-items: center;
-}
-
 .input-box {
-  width: 90%;
-  height: 90%;
-  display: grid;
-  place-items: center;
-  background-color: #b6dfff;
-}
-
-.line-box {
   width: 100%;
+  height: 50px;
   display: flex;
 }
 
-.line-box input {
-  width: 90%;
-  font-size: 16px;
-  height: 60%;
-  outline: none;
-  border: none;
+.input-box input {
+  height: 80%;
+  width: 80%;
   background-color: transparent;
-  align-self: center;
-  margin-left: 20px;
-  margin-right: 15px;
+
+  margin-left: 25px;
+  font-size: 16px;
 }
 
-.line-box input::placeholder {
-  color: #3f627d;
+.input-box button {
+  height: 80%;
+  font-size: 16px;
+  background-color: transparent;
+  width: 60px;
+  border-radius: 4px;
+  padding: 4px;
+  margin-left: 10px;
 }
 
-.line-box button {
-  width: 7%;
-  font-size: 12px;
-  height: 30px;
+/* Chat details - users online, etc */
+.details {
+  height: 100%;
+  width: 300px;
+  right: 0;
 }
 
 </style>

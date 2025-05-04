@@ -1,5 +1,5 @@
 <script setup lang="ts">
-  import { ref } from 'vue';
+  //import { ref } from 'vue';
   import { MessagePayload, UserPayload } from '../api';
   import { marked } from 'marked';
 
@@ -10,11 +10,10 @@
   }>();
   const emit = defineEmits(['edit', 'reply', 'remove']);
   import { openUrl } from '@tauri-apps/plugin-opener';
-  const mouseHover = ref(false);
 
   // time formatter
-  function time(unix: number): string {
-    var date = new Date(unix);
+  function time(): string {
+    var date = new Date(props.payload.sent);
     var current = new Date();
 
     // if today
@@ -29,6 +28,7 @@
     return props.user?.id == props.self?.id;
   }
 
+  /*
   function can_remove(): boolean {
     return is_owner() || props.self?.id_admin as boolean;
   }
@@ -37,14 +37,7 @@
     console.log("Remove", props.payload.id);
     emit("remove", props.payload.id);
   }
-
-  function reply() {
-
-  }
-
-  function edit() {
-
-  }
+  */
 
   // prevent url opening in href
   function on_click(event: MouseEvent) {
@@ -62,79 +55,85 @@
 </script>
 
 <template>
-  <div @mouseover="mouseHover = true" @mouseleave="mouseHover = false" class="message">
-    <div class="under-info">
-      <h2> {{ props.user?.name }} </h2>
-      <p> {{ time(props.payload.sent) }} </p>
-      <div v-if="mouseHover" class="controls">
-        <button v-if="can_remove()" @click="remove"><i class="pi pi-trash"></i></button>
-        <button @click="reply"><i class="pi pi-reply"></i></button>
-        <button v-if="is_owner()" @click="edit"><i class="pi pi-pencil"></i></button>
-      </div>
-    </div>
+  <div v-if="!is_owner()" class="message received">
     <div @click="on_click" v-html="marked(props.payload.text)" class="text"></div>
+    <div class="time" v-text="time()"></div>
+  </div>
+  <div v-if="is_owner()" class="message sent">
+    <div @click="on_click" v-html="marked(props.payload.text)" class="text"></div>
+    <div class="time" v-text="time()"></div>
   </div>
 </template>
 
 <style>
+  .message {
+    background-color: #2e343d;
+    clear: both;
+    line-height: 18px;
+    font-size: 15px;
+    padding: 8px;
+    position: relative;
+    margin: 8px 0;
+    max-width: 75%;
+    white-space: initial;
+    overflow-wrap: anywhere;
+    z-index: 1;
+  }
 
-.message {
-  width: 100%;
-  padding-left: 5px;
-  padding-top: 10px;
-  padding-bottom: 10px;
-  margin-top: 5px;
-}
+  .message:after {
+    position: absolute;
+    content: "";
+    width: 0;
+    height: 0;
+    border-style: solid;
+  }
+  
+  .time {
+    color: #d6d6d6;
+    font-size: 10px;
+  }
+  
+  .sent .time {
+    text-align: end;
+  }
 
-.message .text {
-  font-size: 16;
-  -webkit-user-select: initial;
-  -moz-user-select: -moz-all;
-  -o-user-select: all;
-  user-select: all;
-}
+  .message:first-child {
+    margin: 16px 0 8px;
+  }
 
-.message .controls {
-  position: relative;
-  right: 10px;
-  top: -12px;
-  width: 150px;
-  height: 32px;
-  padding-right: 3px;
-  padding-left: 3px;
-  background-color: #3facff;
-  border-radius: 10px;
-  display: flexbox;
-  align-items: center;
-}
+  .message:last-child {
+    margin: 8px 0 8px 16px;
+  }
 
-.controls button {
-  float: right;
-  width: 15px;
-  padding: 4px;
-  margin: 2px;  
-  width: 25px;
-  right: 0px;
-}
+  .message.received {
+    margin-left: 8px;
+    border-radius: 0px 5px 5px 5px;
+    float: left;
+  }
 
-.message:hover {
-  background-color: #c6e6ff;
-}
+  .message.received .metadata {
+    padding: 0 0 0 16px;
+  }
 
-.message p {
-  inline-size: 90%;
-  width: 80%;
-  white-space: initial;
-  overflow-wrap: anywhere;
-  margin-left: 10px;
-}
+  .message.received:after {
+    border-width: 0px 10px 10px 0;
+    border-color: transparent #2e343d transparent transparent;
+    top: 0;
+    left: -8px;
+  }
 
-.under-info {
-  display: flex;
-}
+  .message.sent {
+    background-color: #6b8afd;
+    margin-right: 8px;
+    border-radius: 5px 0px 5px 5px;
+    float: right;
+  }
 
-.under-info p {
-  margin: 5px;
-}
+  .message.sent:after {
+    border-width: 0px 0 10px 10px;
+    border-color: transparent transparent transparent #6b8afd;
+    top: 0;
+    right: -8px;
+  }
 
 </style>

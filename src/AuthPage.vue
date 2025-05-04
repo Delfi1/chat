@@ -72,7 +72,6 @@ function signup() {
 
 .wrapper form *{
   font-family: 'Poppins',sans-serif;
-  color: black;
   letter-spacing: 0.5px;
   outline: none;
   border: none;
@@ -80,7 +79,6 @@ function signup() {
 
 .wrapper form h1{
   font-size: 32px;
-  color: black;
   font-weight: 500;
   line-height: 42px;
   text-align: center;
@@ -88,7 +86,6 @@ function signup() {
 }
 
 .wrapper form p{
-  color: black;
   font-weight: 500;
   line-height: 42px;
   height: 42px;
@@ -97,7 +94,6 @@ function signup() {
 }
 
 .wrapper form a{
-  color: black;
   font-weight: 500;
   line-height: 42px;
   text-align: center;
@@ -108,7 +104,7 @@ function signup() {
   display: block;
   height: 50px;
   width: 100%;
-  background-color: #91cfff;
+  background-color: #283958;
   border-radius: 3px;
   padding: 0 10px;
   margin-top: 8px;
@@ -116,16 +112,15 @@ function signup() {
   font-weight: 300;
 }
 ::placeholder{
-  color: #0f121a;
+  color: #b7b7b7;
 }
 
 .wrapper button{
   margin-top: 20px;
   width: 100%;
-  background-color: #0091ff;
+  background-color: #283958;
   transition: all 0.8s ease;
   transition-property: color, background-color;
-  color: #080710;
   padding: 15px 0;
   font-size: 18px;
   font-weight: 600;
@@ -134,7 +129,7 @@ function signup() {
 }
 
 .wrapper button:hover {
-  background-color: #0065b1;
+  background-color: #0d2550;
   color: #fff;
 }
 

@@ -82,6 +82,14 @@ pub fn login(ctx: &ReducerContext, name: String, password: String) -> Result<(),
     Ok(())
 }
 
+#[table(name=view)]
+pub struct ViewAccess {
+    #[unique]
+    identity: Identity,
+    // message id
+    id: u32
+}
+
 #[reducer]
 pub fn logout(ctx: &ReducerContext) -> Result<(), String> {
     let Some(mut creds) = get_creds(ctx) else {
