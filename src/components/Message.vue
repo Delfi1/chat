@@ -148,14 +148,14 @@
   .message.sent {
     background-color: #6b8afd;
     margin-right: 8px;
-    border-radius: 5px 0px 5px 5px;
+    border-radius: 5px 5px 0px 5px;
     float: right;
   }
 
   .message.sent:after {
-    border-width: 0px 0 10px 10px;
+    border-width: 10px 0px 0px 10px;
     border-color: transparent transparent transparent #6b8afd;
-    top: 0;
+    bottom: 0;
     right: -8px;
   }
 
