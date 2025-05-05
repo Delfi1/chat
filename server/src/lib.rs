@@ -24,7 +24,7 @@ pub struct User {
     #[unique]
     name: String,
     online: Vec<Identity>,
-    // todo: answer
+    // todo: reply
 }
 
 #[table(name=message, public)]
@@ -36,43 +36,84 @@ pub struct Message {
     reply: Option<u32>,
     sent: Timestamp,
     text: String,
-    // May be 5 file at same time on message
-    files: Vec<FileRef>
+    file: Option<u32>,
+}
+
+#[table(name=request, public)]
+pub struct FileRequest {
+    // file sender
+    #[primary_key]
+    sender: Identity,
+    file: u32
+}
+
+#[table(name=raw_file)]
+struct RawFile {
+    #[auto_inc]
+    #[primary_key]
+    id: u32,
+    name: String,
+    // Current data
+    data: Vec<u8>,
+
+    // Result size
+    size: u64
 }
 
 /// Raw file table with name
 #[table(name=file, public)]
 pub struct File {
-    #[auto_inc]
-    #[primary_key]
     id: u32,
     name: String,
     data: Vec<u8>
 }
 
-#[derive(SpacetimeType)]
-// File raw data for store
-pub struct RawFile {
-    name: String,
-    data: Vec<u8>
+#[reducer]
+pub fn request_file(ctx: &ReducerContext, name: String, size: u64) {
+    let data = ctx.db.raw_file().insert(RawFile {
+        id: 0,
+        name,
+        data: Vec::with_capacity(16777216),
+        size
+    });
+
+    ctx.db.request().insert(FileRequest {
+        sender: ctx.sender,
+        file: data.id
+    });
 }
 
-#[derive(SpacetimeType)]
-pub struct FileRef {
-    pub id: u32,
-    pub name: String
-}
+// Send data pocket
+#[reducer]
+pub fn send_pocket(ctx: &ReducerContext, mut pocket: Vec<u8>) -> Result<(), String> {
+    if get_creds(ctx).is_none() {
+        return Err("Not loginned in".to_string());
+    };
 
-impl FileRef {
-    pub fn new(ctx: &ReducerContext, raw: RawFile) -> Self {
-        let file = ctx.db.file().insert(File {
-            id: 0,
-            name: raw.name,
-            data: raw.data
+    // get stream
+    let Some(request) = ctx.db.request().sender().find(ctx.sender) else {
+        return Err("Request stream not found".to_string());
+    };
+
+    let mut file = ctx.db.raw_file().id().find(request.file).unwrap();
+    file.data.append(&mut pocket);
+
+    if file.data.len() == file.size as usize {
+        // Remove requesr and raw file
+        ctx.db.request().sender().delete(ctx.sender);
+        ctx.db.raw_file().id().delete(file.id);
+        
+        // Create file with id
+        ctx.db.file().insert(File {
+            id: file.id,
+            data: file.data,
+            name: file.name
         });
-
-        Self { id: file.id, name: file.name }
+    } else {
+        ctx.db.raw_file().id().update(file);
     }
+    
+    Ok(())
 }
 
 #[reducer]
@@ -83,8 +124,7 @@ pub fn signup(ctx: &ReducerContext, name: String, password: String) -> Result<()
 
     if name.len() < 3 {
         return Err("Name must be at least 3 characters long".to_string());
-    } 
-
+    }
     if password.len() < 4 {
         return Err("Password must be at least 4 characters long".to_string());
     } 
@@ -136,7 +176,7 @@ pub fn logout(ctx: &ReducerContext) -> Result<(), String> {
 
 #[reducer]
 // todo: files limit
-pub fn send_message(ctx: &ReducerContext, text: String, reply: Option<u32>, files: Vec<RawFile>) -> Result<(), String> {
+pub fn send_message(ctx: &ReducerContext, text: String, reply: Option<u32>, file: Option<u32>) -> Result<(), String> {
     let text = text.trim().to_string();
     let Some(creds) = get_creds(ctx) else {
         return Err("Not loginned in".to_string());
@@ -146,14 +186,14 @@ pub fn send_message(ctx: &ReducerContext, text: String, reply: Option<u32>, file
         return Err("Empty message".to_string());
     }
 
-    let files = files.into_iter().map(|raw| { FileRef::new(ctx, raw) }).collect();
+    // Create files
     ctx.db.message().insert(Message {
         id: 0,
         sender: creds.user_id,
         sent: ctx.timestamp,
         reply,
         text,
-        files
+        file
     });
 
     Ok(())

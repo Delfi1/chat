@@ -6,11 +6,11 @@ use spacetimedb_sdk::__codegen::{self as __sdk, __lib, __sats, __ws};
 
 #[derive(__lib::ser::Serialize, __lib::de::Deserialize, Clone, PartialEq, Debug)]
 #[sats(crate = __lib)]
-pub struct FileRef {
-    pub id: u32,
-    pub name: String,
+pub struct FileRequest {
+    pub sender: __sdk::Identity,
+    pub file: u32,
 }
 
-impl __sdk::InModule for FileRef {
+impl __sdk::InModule for FileRequest {
     type Module = super::RemoteModule;
 }

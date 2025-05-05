@@ -57,106 +57,103 @@
 <template>
   <div v-if="!is_owner()" class="message-container received">
     <div class="avatar"></div>
-    <div class="message received">
+    <div class="message">
+      <p class="name" v-text="props.user?.name"></p>
       <div @click="on_click" v-html="marked(props.payload.text)" class="text"></div>
       <div class="time" v-text="time()"></div>
     </div>
   </div>
   
-  <div v-if="is_owner()" class="message sent">
-    <div @click="on_click" v-html="marked(props.payload.text)" class="text"></div>
-    <div class="time" v-text="time()"></div>
-  </div>
+  <div v-if="is_owner()" class="message-container sent">
+    <div class="message">
+      <p class="name" v-text="props.user?.name"></p>
+      <div @click="on_click" v-html="marked(props.payload.text)" class="text"></div>
+      <div class="time" v-text="time()"></div>
+    </div>
+    <div class="avatar"></div>
+</div>
 </template>
 
 <style>
-  .avatar {
-    width: 40px;
-    height: 40px;
-    background-color: #6b8afd;
-  }
+.message-container {
+  clear: both;
+  position: relative;
+  z-index: 1;
+}
 
-  .message-container {
-    display: flex;
-  }
+.message-container .message {
+  white-space: initial;
+  position: relative;
+  overflow-wrap: anywhere;
+  padding: 8px;
+  margin: 8px 8px;
+  line-height: 18px;
+  min-width: 80px;
+  font-size: 15px;
+  max-width: 60%;
+  float: left;
+}
 
-  .message-container.received {
-    margin-left: 10px;
-  }
+.time {
+  color: #d6d6d6;
+  font-size: 10px;
+}
 
-  .message-container.received .avatar {
-    margin-right: 5px;
-  }
+.name {
+  margin-top: 1px;
+}
 
-  .message {
-    background-color: #2e343d;
-    clear: both;
-    line-height: 18px;
-    min-width: 80px;
-    font-size: 15px;
-    padding: 8px;
-    position: relative;
-    margin: 8px 0;
-    max-width: 60%;
-    white-space: initial;
-    overflow-wrap: anywhere;
-    z-index: 1;
-  }
+.received .name {
+  margin-left: 2px;
+  margin-bottom: 2px;
+  color: #91ff00;
+}
 
-  .message:after {
-    position: absolute;
-    content: "";
-    width: 0;
-    height: 0;
-    border-style: solid;
-  }
-  
-  .time {
-    color: #d6d6d6;
-    font-size: 10px;
-  }
-  
-  .sent .time {
-    text-align: end;
-  }
+.sent .name {
+  text-align: end;
+  margin-right: 2px;
+  margin-bottom: 2px;
+  color: #0e11b2;
+} 
 
-  .message-container:first-child {
-    margin-top: 10px;
-  }
+.message:after {
+  position: absolute;
+  content: "";
+  width: 0;
+  height: 0;
+  border-style: solid;
+}
 
-  .message:last-child {
-    margin: 8px 0 8px 16px;
-  }
+.received .message {
+  margin-left: 16px;
+  border-radius: 0px 5px 5px 5px;
+  background-color: #2e343d;
+}
 
-  .message.received {
-    margin-left: 8px;
-    border-radius: 0px 5px 5px 5px;
-    float: left;
-  }
+.received .message:after {
+  border-width: 0px 10px 10px 0;
+  border-color: transparent #2e343d transparent transparent;
+  top: 0;
+  left: -8px;
+}
 
-  .message.received .metadata {
-    padding: 0 0 0 16px;
-  }
+.sent .message {
+  background-color: #6b8afd;
+  margin-right: 16px;
+  border-radius: 5px 5px 0px 5px;
+  float: right;
+}
 
-  .message.received:after {
-    border-width: 0px 10px 10px 0;
-    border-color: transparent #2e343d transparent transparent;
-    top: 0;
-    left: -8px;
-  }
+.sent .message:after {
+  border-width: 10px 0px 0px 10px;
+  border-color: transparent transparent transparent #6b8afd;
+  bottom: 0;
+  right: -8px;
+}
 
-  .message.sent {
-    background-color: #6b8afd;
-    margin-right: 8px;
-    border-radius: 5px 5px 0px 5px;
-    float: right;
-  }
+.sent .time {
+  text-align: end;  
+}
 
-  .message.sent:after {
-    border-width: 10px 0px 0px 10px;
-    border-color: transparent transparent transparent #6b8afd;
-    bottom: 0;
-    right: -8px;
-  }
 
 </style>

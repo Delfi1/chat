@@ -7,8 +7,10 @@ use spacetimedb_sdk::__codegen::{self as __sdk, __lib, __sats, __ws};
 #[derive(__lib::ser::Serialize, __lib::de::Deserialize, Clone, PartialEq, Debug)]
 #[sats(crate = __lib)]
 pub struct RawFile {
+    pub id: u32,
     pub name: String,
     pub data: Vec<u8>,
+    pub size: u64,
 }
 
 impl __sdk::InModule for RawFile {

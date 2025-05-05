@@ -1,9 +1,13 @@
 <script setup lang="ts">
-import { ref } from 'vue';
-import { UserPayload, MessagePayload, sender } from './api';
+import { onBeforeMount, ref } from 'vue';
+import { UserPayload, MessagePayload, sender, SendPayload } from './api';
 import Message from './components/Message.vue';
 //import User from './components/User.vue';
 import { invoke } from '@tauri-apps/api/core';
+import { open } from '@tauri-apps/plugin-dialog';
+import { listen } from '@tauri-apps/api/event';
+
+// todo: message loading
 
 const props = defineProps<{
   self: UserPayload | undefined
@@ -21,14 +25,34 @@ const page = ref(Pages.chat);
 
 const text = ref('');
 function send() {
+  //invoke('send_file');
   invoke('send_message', { "text": text.value } );
   text.value = '';
+}
+
+const sending = ref(false);
+const sending_state = ref(0);
+
+function attach() {
+  open().then((path) => {
+    console.log(path);
+
+    if (path) {
+      invoke('attach_file', { "path": path });
+    }
+  })
 }
 
 function remove(id: number) {
   invoke('remove_message', { "id": id });
 }
 
+onBeforeMount(() => {
+  listen<SendPayload>('send_status', (event) => {
+    sending.value = event.payload.ready != event.payload.lenght;
+    sending_state.value = (event.payload.ready / event.payload.lenght) * 100;
+  });
+});
 </script>
 
 <template>
@@ -65,11 +89,16 @@ function remove(id: number) {
             <Message v-for="message in props.messages" :self="self" :user="sender(props.users, message)" :payload="message" @remove="remove"></Message>
           </div>
           <div class="input-box">
+            <button @click="attach" class="file-input">
+              <i class="pi pi-file-arrow-up"></i>
+            </button>
             <input placeholder="Send message" v-model="text" v-on:keyup.enter="send"/>
             <button @click="send">Send</button>
           </div>
         </div>
-        <div class="details"></div>
+        <div class="details">
+          <progress v-if="sending" :value="sending_state" max="100">70 %</progress>
+        </div>
       </div>
 
       <div v-if="page == Pages.account" class="account-page">
@@ -195,6 +224,38 @@ function remove(id: number) {
   display: flex;
 }
 
+.input-box input[type="file"] {
+  display: none;
+}
+
+.input-box .file-input {
+  align-items: center;
+  text-align: center;
+  align-content: center;
+  width: 35px;
+  height: 35px;
+  padding: 4px;
+  margin-left: 15px;
+  background-color: #131313;
+  border: #131313;
+  border-radius: 12px;
+}
+
+.input-box .file-input i {
+  transition: all 0.3s ease;
+  font-size: 1.2rem;
+}
+
+.input-box .file-input i:hover {
+  color: #6b8afd;
+  font-size: 1.1rem;
+}
+
+.input-box .file-input i:active {
+  color: #587cff;
+  font-size: 1rem;
+}
+
 .input-box input {
   height: 80%;
   width: 80%;
@@ -202,7 +263,7 @@ function remove(id: number) {
   outline: none;
   border: none;
 
-  margin-left: 25px;
+  margin-left: 15px;
   font-size: 16px;
 }
 
@@ -213,7 +274,7 @@ function remove(id: number) {
   width: 60px;
   border-radius: 4px;
   padding: 4px;
-  margin-left: 10px;
+  margin-left: 8px;
 }
 
 /* Chat details - users online, etc */

@@ -1,4 +1,4 @@
-use std::sync::{Arc, Mutex};
+use std::{path::PathBuf, sync::{Arc, Mutex}};
 use tauri::{AppHandle, Emitter, Manager, RunEvent, State};
 use tauri_plugin_updater::UpdaterExt;
 
@@ -85,6 +85,67 @@ impl UserPayload {
         }
     }
 }
+
+#[derive(Clone, serde::Serialize)]
+pub struct SendPayload {
+    pub ready: usize,
+    pub lenght: usize
+}
+
+impl SendPayload {
+    pub fn new(ready: usize, lenght: usize) -> Self {
+        Self { ready, lenght }
+    }
+}
+
+pub struct SendFile {
+    name: String,
+    data: Vec<u8>,
+    size: usize
+}
+
+impl SendFile {
+    // N kilobytes
+    const N: usize = 512;
+    const POCKET_SIZE: usize = 1024 * Self::N;
+
+    fn path_name(path: &PathBuf) -> Option<String> {
+        path.file_name().and_then(|s| s.to_str())
+            .and_then(|s| Some(s.to_string()))
+    }
+
+    pub fn new(path: PathBuf) -> std::result::Result<Self, String> {
+        let Some(name) = Self::path_name(&path) else {
+            return Err("Filename error".to_string());
+        };
+
+        let Ok(data) = std::fs::read(path) else {
+            return Err("Read error".to_string());
+        };
+        
+        let size = data.len();
+        Ok(Self {
+            name,
+            data,
+            size
+        })
+    }
+
+    fn send(&mut self, session: SessionState) {
+        let Some(connection) = &session.lock().unwrap().connection else {
+            return;
+        };
+
+        let pocket = self.data.drain(0..Self::POCKET_SIZE.min(self.data.len())).collect();
+        connection.reducers.send_pocket(pocket).expect("Spacetimedb error");
+    }
+
+}
+
+#[derive(Default)]
+struct AttachedFile(Option<SendFile>);
+type AttachedFileState = Arc<Mutex<AttachedFile>>;
+
 
 #[derive(Default)]
 struct ConnectionHandler(Option<std::thread::JoinHandle<()>>);
@@ -188,6 +249,16 @@ impl SessionInner {
         self.app.emit("message_updated", ()).expect("Emit error");
     }
 
+    pub fn on_file_inserted(&mut self, file: &File) {
+        println!("{}_{}", file.id, file.name);
+    }
+
+    pub fn on_send_pocket(&mut self, lenght: usize, remain: usize) {
+        self.app
+            .emit("send_status", SendPayload::new(lenght-remain, lenght))
+            .expect("Emit error");
+    }
+
     pub fn exit(&self) {
         println!("Exit");
 
@@ -202,7 +273,7 @@ impl SessionInner {
     }
 }
 
-fn register_callbacks(ctx: &DbConnection, session: SessionState) {
+fn register_callbacks(ctx: &DbConnection, session: SessionState, attach: AttachedFileState) {
     let inner = session.clone();
     ctx.db.user().on_insert(move |_ctx, user| {
         inner.lock().unwrap().on_user_insert(user);
@@ -234,6 +305,11 @@ fn register_callbacks(ctx: &DbConnection, session: SessionState) {
     });
 
     let inner = session.clone();
+    ctx.db.file().on_insert(move |_ctx, file| {
+        inner.lock().unwrap().on_file_inserted(file);
+    });
+
+    let inner = session.clone();
     ctx.reducers.on_login(move |ctx, _name, _password| {
         if let Status::Failed(err) = &ctx.event.status {
             inner.lock().unwrap().on_login_error(err.to_string());
@@ -244,6 +320,38 @@ fn register_callbacks(ctx: &DbConnection, session: SessionState) {
     ctx.reducers.on_signup(move |ctx, _name, _password| {
         if let Status::Failed(err) = &ctx.event.status {
             inner.lock().unwrap().on_login_error(err.to_string());
+        }
+    });
+
+    let inner = session.clone();
+    let attach_inner = attach.clone();
+    ctx.reducers.on_request_file(move |ctx, name, size| {
+        match &ctx.event.status {
+            Status::Committed => {
+                println!("Sending file {}; {} bytes", name, size);
+                let Some(file) = &mut attach_inner.lock().unwrap().0 else {
+                    return;
+                };
+
+                file.send(inner.clone());
+            },
+            _ => ()
+        }
+    });
+
+    let inner = session.clone();
+    let attach_inner = attach.clone();
+    ctx.reducers.on_send_pocket(move |ctx, _data| {
+        match &ctx.event.status {
+            Status::Committed => {
+                let Some(file) = &mut attach_inner.lock().unwrap().0 else {
+                    return;
+                };
+
+                file.send(inner.clone());
+                inner.lock().unwrap().on_send_pocket(file.size, file.data.len());
+            },
+            _ => ()
         }
     });
 }
@@ -259,7 +367,7 @@ fn subscribe_to_tables(ctx: &DbConnection) {
         .subscribe(["SELECT * FROM user", "SELECT * FROM message"]);
 }
 
-fn try_connect(addr: Option<String>, session: SessionState) {
+fn try_connect(addr: Option<String>, session: SessionState, attach: AttachedFileState) {
     let on_connect_inner = session.clone();
     let on_disconnect_inner = session.clone();
 
@@ -291,7 +399,7 @@ fn try_connect(addr: Option<String>, session: SessionState) {
     match res {
         Ok(connection) => {
             // Setup spacetime callbacks, get tables
-            register_callbacks(&connection, session.clone());
+            register_callbacks(&connection, session.clone(), attach);
             subscribe_to_tables(&connection);
 
             connection.run_threaded();
@@ -307,6 +415,7 @@ fn try_connect(addr: Option<String>, session: SessionState) {
 fn connect(
     addr: Option<String>,
     session: State<SessionState>,
+    attach: State<AttachedFileState>,
     connect_handler: State<ConnectionState>,
 ) {
     if let Some(connection) = session.lock().unwrap().connection.take() {
@@ -325,7 +434,8 @@ fn connect(
 
     // Connect to STDB in thread
     let session_inner = session.inner().clone();
-    let handler = std::thread::spawn(move || try_connect(addr, session_inner));
+    let attached_inner = attach.inner().clone();
+    let handler = std::thread::spawn(move || try_connect(addr, session_inner, attached_inner));
 
     connect_handler.lock().unwrap().0 = Some(handler);
 }
@@ -382,7 +492,7 @@ fn send_message(text: String, reply: Option<u32>, session: State<SessionState>) 
 
     connection
         .reducers
-        .send_message(text, reply, Vec::new())
+        .send_message(text, reply, None)
         .expect("Spacetime error");
 }
 
@@ -430,9 +540,35 @@ fn get_users(session: State<SessionState>) -> Vec<UserPayload> {
     session.lock().unwrap().get_users()
 }
 
+#[tauri::command]
+fn attach_file(path: PathBuf, attach: State<AttachedFileState>) -> std::result::Result<(), String> {
+    let send_file = SendFile::new(path)?;
+    println!("Attached file: {}", send_file.name);
+
+    attach.lock().unwrap().0 = Some(send_file);
+
+    Ok(())
+}
+
+#[tauri::command]
+fn send_file(attach: State<AttachedFileState>, session: State<SessionState>) {
+    let Some(connection) = &session.lock().unwrap().connection else {
+        return;
+    };
+
+    let Some(file) = &attach.lock().unwrap().0 else {
+        return
+    };
+
+    // Request file and begin sending;
+    connection.reducers.request_file(file.name.clone(), file.size as u64).expect("Spacetime error");
+}
+
+//todo: attach file, send file, file stream
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    let mut builder = tauri::Builder::default();
+    let mut builder = tauri::Builder::default().plugin(tauri_plugin_dialog::init());
     #[cfg(desktop)]
     {
         builder = builder.plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
@@ -455,6 +591,7 @@ pub fn run() {
         })
         .plugin(tauri_plugin_opener::init())
         .manage(Arc::new(Mutex::new(ConnectionHandler::default())))
+        .manage(Arc::new(Mutex::new(AttachedFile::default())))
         .invoke_handler(tauri::generate_handler![
             connect,
             disconnect,
@@ -466,9 +603,11 @@ pub fn run() {
             messages_len,
             get_messages,
             get_users,
+            attach_file,
+            send_file
         ])
         .build(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .expect("error while building tauri application");
 
     app.run(|handle, event| match event {
         RunEvent::Ready => {

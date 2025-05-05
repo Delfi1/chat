@@ -7,16 +7,20 @@ use spacetimedb_sdk::__codegen::{self as __sdk, __lib, __sats, __ws};
 pub mod client_connected_reducer;
 pub mod client_disconnected_reducer;
 pub mod credentials_table;
-pub mod file_ref_type;
+pub mod file_request_type;
 pub mod file_table;
 pub mod file_type;
 pub mod login_reducer;
 pub mod logout_reducer;
 pub mod message_table;
 pub mod message_type;
+pub mod raw_file_table;
 pub mod raw_file_type;
 pub mod remove_message_reducer;
+pub mod request_file_reducer;
+pub mod request_table;
 pub mod send_message_reducer;
+pub mod send_pocket_reducer;
 pub mod signup_reducer;
 pub mod user_credentials_type;
 pub mod user_table;
@@ -29,18 +33,22 @@ pub use client_disconnected_reducer::{
     client_disconnected, set_flags_for_client_disconnected, ClientDisconnectedCallbackId,
 };
 pub use credentials_table::*;
-pub use file_ref_type::FileRef;
+pub use file_request_type::FileRequest;
 pub use file_table::*;
 pub use file_type::File;
 pub use login_reducer::{login, set_flags_for_login, LoginCallbackId};
 pub use logout_reducer::{logout, set_flags_for_logout, LogoutCallbackId};
 pub use message_table::*;
 pub use message_type::Message;
+pub use raw_file_table::*;
 pub use raw_file_type::RawFile;
 pub use remove_message_reducer::{
     remove_message, set_flags_for_remove_message, RemoveMessageCallbackId,
 };
+pub use request_file_reducer::{request_file, set_flags_for_request_file, RequestFileCallbackId};
+pub use request_table::*;
 pub use send_message_reducer::{send_message, set_flags_for_send_message, SendMessageCallbackId};
+pub use send_pocket_reducer::{send_pocket, set_flags_for_send_pocket, SendPocketCallbackId};
 pub use signup_reducer::{set_flags_for_signup, signup, SignupCallbackId};
 pub use user_credentials_type::UserCredentials;
 pub use user_table::*;
@@ -64,10 +72,17 @@ pub enum Reducer {
     RemoveMessage {
         id: u32,
     },
+    RequestFile {
+        name: String,
+        size: u64,
+    },
     SendMessage {
         text: String,
         reply: Option<u32>,
-        files: Vec<RawFile>,
+        file: Option<u32>,
+    },
+    SendPocket {
+        pocket: Vec<u8>,
     },
     Signup {
         name: String,
@@ -87,7 +102,9 @@ impl __sdk::Reducer for Reducer {
             Reducer::Login { .. } => "login",
             Reducer::Logout => "logout",
             Reducer::RemoveMessage { .. } => "remove_message",
+            Reducer::RequestFile { .. } => "request_file",
             Reducer::SendMessage { .. } => "send_message",
+            Reducer::SendPocket { .. } => "send_pocket",
             Reducer::Signup { .. } => "signup",
         }
     }
@@ -118,9 +135,23 @@ impl TryFrom<__ws::ReducerCallInfo<__ws::BsatnFormat>> for Reducer {
                 remove_message_reducer::RemoveMessageArgs,
             >("remove_message", &value.args)?
             .into()),
+            "request_file" => Ok(
+                __sdk::parse_reducer_args::<request_file_reducer::RequestFileArgs>(
+                    "request_file",
+                    &value.args,
+                )?
+                .into(),
+            ),
             "send_message" => Ok(
                 __sdk::parse_reducer_args::<send_message_reducer::SendMessageArgs>(
                     "send_message",
+                    &value.args,
+                )?
+                .into(),
+            ),
+            "send_pocket" => Ok(
+                __sdk::parse_reducer_args::<send_pocket_reducer::SendPocketArgs>(
+                    "send_pocket",
                     &value.args,
                 )?
                 .into(),
@@ -147,6 +178,8 @@ pub struct DbUpdate {
     credentials: __sdk::TableUpdate<UserCredentials>,
     file: __sdk::TableUpdate<File>,
     message: __sdk::TableUpdate<Message>,
+    raw_file: __sdk::TableUpdate<RawFile>,
+    request: __sdk::TableUpdate<FileRequest>,
     user: __sdk::TableUpdate<User>,
 }
 
@@ -161,6 +194,10 @@ impl TryFrom<__ws::DatabaseUpdate<__ws::BsatnFormat>> for DbUpdate {
                 }
                 "file" => db_update.file = file_table::parse_table_update(table_update)?,
                 "message" => db_update.message = message_table::parse_table_update(table_update)?,
+                "raw_file" => {
+                    db_update.raw_file = raw_file_table::parse_table_update(table_update)?
+                }
+                "request" => db_update.request = request_table::parse_table_update(table_update)?,
                 "user" => db_update.user = user_table::parse_table_update(table_update)?,
 
                 unknown => {
@@ -191,12 +228,16 @@ impl __sdk::DbUpdate for DbUpdate {
         diff.credentials = cache
             .apply_diff_to_table::<UserCredentials>("credentials", &self.credentials)
             .with_updates_by_pk(|row| &row.user_id);
-        diff.file = cache
-            .apply_diff_to_table::<File>("file", &self.file)
-            .with_updates_by_pk(|row| &row.id);
+        diff.file = cache.apply_diff_to_table::<File>("file", &self.file);
         diff.message = cache
             .apply_diff_to_table::<Message>("message", &self.message)
             .with_updates_by_pk(|row| &row.id);
+        diff.raw_file = cache
+            .apply_diff_to_table::<RawFile>("raw_file", &self.raw_file)
+            .with_updates_by_pk(|row| &row.id);
+        diff.request = cache
+            .apply_diff_to_table::<FileRequest>("request", &self.request)
+            .with_updates_by_pk(|row| &row.sender);
         diff.user = cache
             .apply_diff_to_table::<User>("user", &self.user)
             .with_updates_by_pk(|row| &row.id);
@@ -212,6 +253,8 @@ pub struct AppliedDiff<'r> {
     credentials: __sdk::TableAppliedDiff<'r, UserCredentials>,
     file: __sdk::TableAppliedDiff<'r, File>,
     message: __sdk::TableAppliedDiff<'r, Message>,
+    raw_file: __sdk::TableAppliedDiff<'r, RawFile>,
+    request: __sdk::TableAppliedDiff<'r, FileRequest>,
     user: __sdk::TableAppliedDiff<'r, User>,
 }
 
@@ -232,6 +275,8 @@ impl<'r> __sdk::AppliedDiff<'r> for AppliedDiff<'r> {
         );
         callbacks.invoke_table_row_callbacks::<File>("file", &self.file, event);
         callbacks.invoke_table_row_callbacks::<Message>("message", &self.message, event);
+        callbacks.invoke_table_row_callbacks::<RawFile>("raw_file", &self.raw_file, event);
+        callbacks.invoke_table_row_callbacks::<FileRequest>("request", &self.request, event);
         callbacks.invoke_table_row_callbacks::<User>("user", &self.user, event);
     }
 }
@@ -811,6 +856,8 @@ impl __sdk::SpacetimeModule for RemoteModule {
         credentials_table::register_table(client_cache);
         file_table::register_table(client_cache);
         message_table::register_table(client_cache);
+        raw_file_table::register_table(client_cache);
+        request_table::register_table(client_cache);
         user_table::register_table(client_cache);
     }
 }
