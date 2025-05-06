@@ -44,11 +44,29 @@ async fn update(app: tauri::AppHandle) -> tauri_plugin_updater::Result<()> {
 }
 
 #[derive(Clone, serde::Serialize)]
+pub struct FileRefPayload {
+    pub id: u32,
+    pub name: String,
+    pub size: u64
+}
+
+impl FileRefPayload {
+    pub fn new(file: FileRef) -> Self {
+        Self {
+            id: file.id,
+            name: file.name,
+            size: file.size
+        }
+    }
+}
+
+#[derive(Clone, serde::Serialize)]
 pub struct MessagePayload {
     pub id: u32,
     pub sender: u32,
     pub sent: u128,
     pub text: String,
+    pub file: Option<FileRefPayload>
 }
 
 impl MessagePayload {
@@ -58,11 +76,16 @@ impl MessagePayload {
             .to_duration_since_unix_epoch()
             .unwrap()
             .as_millis();
+
+        let file = message.file
+            .and_then(|file| Some(FileRefPayload::new(file)));
+        
         Self {
             id: message.id,
             sender: message.sender,
             sent,
             text: message.text,
+            file
         }
     }
 }
@@ -325,7 +348,7 @@ fn register_callbacks(ctx: &DbConnection, session: SessionState, attach: Attache
 
     let inner = session.clone();
     let attach_inner = attach.clone();
-    ctx.reducers.on_request_file(move |ctx, name, size| {
+    ctx.reducers.on_request_stream(move |ctx, name, size| {
         match &ctx.event.status {
             Status::Committed => {
                 println!("Sending file {}; {} bytes", name, size);
@@ -364,7 +387,7 @@ fn on_sub_error(_ctx: &ErrorContext, err: Error) {
 fn subscribe_to_tables(ctx: &DbConnection) {
     ctx.subscription_builder()
         .on_error(on_sub_error)
-        .subscribe(["SELECT * FROM user", "SELECT * FROM message"]);
+        .subscribe(["SELECT * FROM user", "SELECT * FROM message", "SELECT * from request r WHERE r.sender = :sender"]);
 }
 
 fn try_connect(addr: Option<String>, session: SessionState, attach: AttachedFileState) {
@@ -485,15 +508,41 @@ fn signup(name: String, password: String, session: State<SessionState>) {
 }
 
 #[tauri::command]
-fn send_message(text: String, reply: Option<u32>, session: State<SessionState>) {
+fn attach_file(path: PathBuf, attach: State<AttachedFileState>) -> std::result::Result<(), String> {
+    let send_file = SendFile::new(path)?;
+    println!("Attached file: {}", send_file.name);
+
+    attach.lock().unwrap().0 = Some(send_file);
+
+    Ok(())
+}
+
+#[tauri::command]
+fn send_message(text: String, reply: Option<u32>, attach: State<AttachedFileState>, session: State<SessionState>) {
     let Some(connection) = &session.lock().unwrap().connection else {
         return;
     };
 
-    connection
-        .reducers
-        .send_message(text, reply, None)
-        .expect("Spacetime error");
+    if let Some(file) = &attach.lock().unwrap().0 {
+        // On request is finished
+        let attach_inner = attach.inner().clone();
+        connection.db.request().on_update(move |ctx, _, request| {
+            if request.finished {
+                ctx.reducers
+                    .send_message(text.clone(), reply)
+                    .expect("Spacetime error"); 
+
+                attach_inner.lock().unwrap().0 = None;
+            }
+        });
+        
+        connection.reducers.request_stream(file.name.clone(), file.size as u64).expect("Spacetime error");
+    } else {
+        connection
+            .reducers
+            .send_message(text, reply)
+            .expect("Spacetime error");
+    }
 }
 
 #[tauri::command]
@@ -540,32 +589,6 @@ fn get_users(session: State<SessionState>) -> Vec<UserPayload> {
     session.lock().unwrap().get_users()
 }
 
-#[tauri::command]
-fn attach_file(path: PathBuf, attach: State<AttachedFileState>) -> std::result::Result<(), String> {
-    let send_file = SendFile::new(path)?;
-    println!("Attached file: {}", send_file.name);
-
-    attach.lock().unwrap().0 = Some(send_file);
-
-    Ok(())
-}
-
-#[tauri::command]
-fn send_file(attach: State<AttachedFileState>, session: State<SessionState>) {
-    let Some(connection) = &session.lock().unwrap().connection else {
-        return;
-    };
-
-    let Some(file) = &attach.lock().unwrap().0 else {
-        return
-    };
-
-    // Request file and begin sending;
-    connection.reducers.request_file(file.name.clone(), file.size as u64).expect("Spacetime error");
-}
-
-//todo: attach file, send file, file stream
-
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let mut builder = tauri::Builder::default().plugin(tauri_plugin_dialog::init());
@@ -603,8 +626,7 @@ pub fn run() {
             messages_len,
             get_messages,
             get_users,
-            attach_file,
-            send_file
+            attach_file
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application");

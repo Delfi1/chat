@@ -236,6 +236,7 @@ onBeforeMount(() => {
   height: 35px;
   padding: 4px;
   margin-left: 15px;
+  margin-top: 5px;
   background-color: #131313;
   border: #131313;
   border-radius: 12px;
@@ -264,6 +265,7 @@ onBeforeMount(() => {
   border: none;
 
   margin-left: 15px;
+  margin-top: 5px;
   font-size: 16px;
 }
 
@@ -275,6 +277,7 @@ onBeforeMount(() => {
   border-radius: 4px;
   padding: 4px;
   margin-left: 8px;
+  margin-top: 5px;
 }
 
 /* Chat details - users online, etc */

@@ -2,6 +2,7 @@
   //import { ref } from 'vue';
   import { MessagePayload, UserPayload } from '../api';
   import { marked } from 'marked';
+  import File from './File.vue';
 
   const props = defineProps<{
     self: UserPayload | undefined,
@@ -60,6 +61,7 @@
     <div class="message">
       <p class="name" v-text="props.user?.name"></p>
       <div @click="on_click" v-html="marked(props.payload.text)" class="text"></div>
+      <File v-if="payload.file" :payload="payload.file"></File>
       <div class="time" v-text="time()"></div>
     </div>
   </div>
@@ -68,6 +70,7 @@
     <div class="message">
       <p class="name" v-text="props.user?.name"></p>
       <div @click="on_click" v-html="marked(props.payload.text)" class="text"></div>
+      <File v-if="payload.file" :payload="payload.file"></File>
       <div class="time" v-text="time()"></div>
     </div>
     <div class="avatar"></div>
@@ -94,26 +97,20 @@
   float: left;
 }
 
-.time {
-  color: #d6d6d6;
-  font-size: 10px;
-}
-
 .name {
   margin-top: 1px;
+  color: #fff;
 }
 
 .received .name {
   margin-left: 2px;
   margin-bottom: 2px;
-  color: #91ff00;
 }
 
 .sent .name {
   text-align: end;
   margin-right: 2px;
   margin-bottom: 2px;
-  color: #0e11b2;
 } 
 
 .message:after {
@@ -151,9 +148,13 @@
   right: -8px;
 }
 
-.sent .time {
-  text-align: end;  
+.time {
+  color: #d6d6d6;
+  font-size: 10px;
 }
 
+.sent .time {
+  text-align: end;
+}
 
 </style>

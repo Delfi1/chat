@@ -11,7 +11,14 @@ interface MessagePayload {
     id: number,
     sender: number,
     sent: number,
-    text: string
+    text: string,
+    file: FileRefPayload | null
+}
+
+interface FileRefPayload {
+    id: number,
+    name: string,
+    size: number
 }
 
 interface SendPayload {
@@ -25,4 +32,4 @@ function sender(users: UserPayload[], message: MessagePayload): UserPayload | un
 }
 
 export { sender }
-export type { UserPayload, MessagePayload, SendPayload }
+export type { UserPayload, MessagePayload, FileRefPayload, SendPayload }

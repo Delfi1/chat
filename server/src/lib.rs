@@ -36,7 +36,7 @@ pub struct Message {
     reply: Option<u32>,
     sent: Timestamp,
     text: String,
-    file: Option<u32>,
+    file: Option<FileRef>,
 }
 
 #[table(name=request, public)]
@@ -44,23 +44,29 @@ pub struct FileRequest {
     // file sender
     #[primary_key]
     sender: Identity,
+    finished: bool,
     file: u32
 }
 
-#[table(name=raw_file)]
-struct RawFile {
+#[table(name=temp_file)]
+struct TempFile {
     #[auto_inc]
     #[primary_key]
     id: u32,
     name: String,
     // Current data
     data: Vec<u8>,
-
     // Result size
     size: u64
 }
 
-/// Raw file table with name
+#[derive(SpacetimeType)]
+pub struct FileRef {
+    id: u32,
+    name: String,
+    size: u64,
+}
+
 #[table(name=file, public)]
 pub struct File {
     id: u32,
@@ -69,18 +75,25 @@ pub struct File {
 }
 
 #[reducer]
-pub fn request_file(ctx: &ReducerContext, name: String, size: u64) {
-    let data = ctx.db.raw_file().insert(RawFile {
+pub fn request_stream(ctx: &ReducerContext, name: String, size: u64) -> Result<(), String> {
+    let data = ctx.db.temp_file().insert(TempFile {
         id: 0,
         name,
-        data: Vec::with_capacity(16777216),
+        data: Vec::with_capacity(32768),
         size
     });
 
+    if ctx.db.request().sender().find(&ctx.sender).is_some() {
+        return Err("Stream is aleready exists".to_string());
+    }
+
     ctx.db.request().insert(FileRequest {
         sender: ctx.sender,
+        finished: false,
         file: data.id
     });
+
+    Ok(())
 }
 
 // Send data pocket
@@ -91,26 +104,24 @@ pub fn send_pocket(ctx: &ReducerContext, mut pocket: Vec<u8>) -> Result<(), Stri
     };
 
     // get stream
-    let Some(request) = ctx.db.request().sender().find(ctx.sender) else {
+    let Some(mut request) = ctx.db.request().sender().find(ctx.sender) else {
         return Err("Request stream not found".to_string());
     };
 
-    let mut file = ctx.db.raw_file().id().find(request.file).unwrap();
+    if request.finished {
+        return Err("Request is finished".to_string());
+    }
+
+    let mut file = ctx.db.temp_file().id().find(request.file).unwrap();
     file.data.append(&mut pocket);
 
     if file.data.len() == file.size as usize {
-        // Remove requesr and raw file
-        ctx.db.request().sender().delete(ctx.sender);
-        ctx.db.raw_file().id().delete(file.id);
-        
-        // Create file with id
-        ctx.db.file().insert(File {
-            id: file.id,
-            data: file.data,
-            name: file.name
-        });
+        request.finished = true;
+
+        // Update request and temp file
+        ctx.db.request().sender().update(request);
     } else {
-        ctx.db.raw_file().id().update(file);
+        ctx.db.temp_file().id().update(file);
     }
     
     Ok(())
@@ -176,13 +187,35 @@ pub fn logout(ctx: &ReducerContext) -> Result<(), String> {
 
 #[reducer]
 // todo: files limit
-pub fn send_message(ctx: &ReducerContext, text: String, reply: Option<u32>, file: Option<u32>) -> Result<(), String> {
+pub fn send_message(ctx: &ReducerContext, text: String, reply: Option<u32>) -> Result<(), String> {
     let text = text.trim().to_string();
     let Some(creds) = get_creds(ctx) else {
         return Err("Not loginned in".to_string());
     };
 
-    if text.is_empty() {
+    let file = match ctx.db.request().sender().find(ctx.sender) {
+        Some(request) => {
+            if !request.finished {
+                return Err("Can't send message - file is not uploaded".to_string());
+            }
+            let temp = ctx.db.temp_file().id().find(request.file).unwrap();            
+
+            let file = ctx.db.file().insert(File {
+                id: temp.id,
+                name: temp.name,
+                data: temp.data
+            });
+
+            // Cleanup request and temp file
+            ctx.db.request().sender().delete(request.sender);
+            ctx.db.temp_file().id().delete(temp.id);
+
+            Some(FileRef { id: file.id, name: file.name, size: file.data.len() as u64 })
+        },
+        None => None
+    };
+
+    if text.is_empty() && file.is_none() {
         return Err("Empty message".to_string());
     }
 
@@ -244,4 +277,8 @@ pub fn client_connected(ctx: &ReducerContext) {
 #[reducer(client_disconnected)]
 pub fn client_disconnected(ctx: &ReducerContext) {
     update_online(ctx, false);
+    if let Some(request) = ctx.db.request().sender().find(ctx.sender) {
+        ctx.db.request().sender().delete(ctx.sender);
+        ctx.db.temp_file().id().delete(request.file);
+    }
 }
