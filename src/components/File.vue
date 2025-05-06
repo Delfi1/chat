@@ -3,8 +3,7 @@ import { FileRefPayload } from '../api';
 
 const props = defineProps<{
   payload: FileRefPayload,
-  }>();
-const emit = defineEmits(['download']);
+}>();
 
 function formatSize(size: number): string {
   var i = size == 0 ? 0 : Math.floor(Math.log(size) / Math.log(1024));
@@ -20,7 +19,6 @@ function formatSize(size: number): string {
     <i></i>
     <p class="filename" v-text="props.payload.name"></p>
     <p class="filesize" v-text="formatSize(props.payload.size)"></p>
-
   </div>
 </template>
 
@@ -37,6 +35,6 @@ p.filename {
   text-align: center;
   font-size: 12px;
   color: #fff;
-} 
+}
 
 </style>

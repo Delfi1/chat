@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import { onBeforeMount, ref } from 'vue';
-import { UserPayload, MessagePayload, sender, SendPayload } from './api';
+import { UserPayload, MessagePayload, sender, SendPayload, FileRefPayload } from './api';
 import Message from './components/Message.vue';
 //import User from './components/User.vue';
 import { invoke } from '@tauri-apps/api/core';
 import { open } from '@tauri-apps/plugin-dialog';
 import { listen } from '@tauri-apps/api/event';
+import { openPath } from '@tauri-apps/plugin-opener';
 
 // todo: message loading
 
@@ -47,6 +48,12 @@ function remove(id: number) {
   invoke('remove_message', { "id": id });
 }
 
+function download(file: FileRefPayload) {
+  invoke<string | null>('download_file', { "payload": file }).then((path) => {
+    if (path) { openPath(path) };
+  });
+}
+
 onBeforeMount(() => {
   listen<SendPayload>('send_status', (event) => {
     sending.value = event.payload.ready != event.payload.lenght;
@@ -86,7 +93,7 @@ onBeforeMount(() => {
       <div v-if="page == Pages.chat" class="chat-page">
         <div class="chat-box">
           <div class="messages-box" id="messages-area">
-            <Message v-for="message in props.messages" :self="self" :user="sender(props.users, message)" :payload="message" @remove="remove"></Message>
+            <Message v-for="message in props.messages" :self="self" :user="sender(props.users, message)" :payload="message" @download="download" @remove="remove"></Message>
           </div>
           <div class="input-box">
             <button @click="attach" class="file-input">

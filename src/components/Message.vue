@@ -9,7 +9,7 @@
     user: UserPayload | undefined,
     payload: MessagePayload,
   }>();
-  const emit = defineEmits(['edit', 'reply', 'remove']);
+  const emit = defineEmits(['edit', 'reply', 'remove', 'download']);
   import { openUrl } from '@tauri-apps/plugin-opener';
 
   // time formatter
@@ -61,7 +61,7 @@
     <div class="message">
       <p class="name" v-text="props.user?.name"></p>
       <div @click="on_click" v-html="marked(props.payload.text)" class="text"></div>
-      <File v-if="payload.file" :payload="payload.file"></File>
+      <File v-if="payload.file" @click="emit('download', payload.file)" :payload="payload.file"></File>
       <div class="time" v-text="time()"></div>
     </div>
   </div>
@@ -70,7 +70,7 @@
     <div class="message">
       <p class="name" v-text="props.user?.name"></p>
       <div @click="on_click" v-html="marked(props.payload.text)" class="text"></div>
-      <File v-if="payload.file" :payload="payload.file"></File>
+      <File v-if="payload.file" @click="emit('download', payload.file)" :payload="payload.file"></File>
       <div class="time" v-text="time()"></div>
     </div>
     <div class="avatar"></div>

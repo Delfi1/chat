@@ -43,7 +43,7 @@ async fn update(app: tauri::AppHandle) -> tauri_plugin_updater::Result<()> {
     Ok(())
 }
 
-#[derive(Clone, serde::Serialize)]
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct FileRefPayload {
     pub id: u32,
     pub name: String,
@@ -174,10 +174,17 @@ type AttachedFileState = Arc<Mutex<AttachedFile>>;
 struct ConnectionHandler(Option<std::thread::JoinHandle<()>>);
 type ConnectionState = Arc<Mutex<ConnectionHandler>>;
 
+/// Downloads file from server
+pub struct DownloadingState {
+    file: u32,
+    subscription: bindings::SubscriptionHandle
+}
+
 /// Session handler
 struct SessionInner {
     /// Window events emitter
     pub app: AppHandle,
+    pub downloading: Vec<DownloadingState>,
     pub connection: Option<DbConnection>,
     pub identity: Option<Identity>,
 }
@@ -188,6 +195,7 @@ impl SessionInner {
     pub fn new(handle: &AppHandle) -> Self {
         Self {
             app: handle.clone(),
+            downloading: Vec::new(),
             connection: None,
             identity: None,
         }
@@ -272,8 +280,46 @@ impl SessionInner {
         self.app.emit("message_updated", ()).expect("Emit error");
     }
 
+    /// Load file on inserted
     pub fn on_file_inserted(&mut self, file: &File) {
-        println!("{}_{}", file.id, file.name);
+        println!("Inserted {}_{}", file.id, file.name);
+        let path = format!("./downloads/{}_{}", file.id, file.name);
+
+        std::fs::create_dir_all("./downloads/").expect("FS error");
+        std::fs::write(path, &file.data).expect("Write error");
+        let index = self.downloading.iter().enumerate()
+            .find(|(_, d)| d.file == file.id)
+            .and_then(|(i, _)| Some(i)).unwrap();
+
+        let state = self.downloading.swap_remove(index);
+        state.subscription.unsubscribe().expect("Spacetime error");
+        self.downloading.retain(|d| d.file != file.id);
+    }
+
+    pub fn download_file(&mut self, payload: FileRefPayload, inner: SessionState) -> Option<String> {
+        let Some(connection) = &self.connection else {
+            return None;
+        };
+    
+        // If is downloading...
+        if self.downloading.iter().find(|d| d.file == payload.id).is_some() {
+            return None;
+        }
+    
+        let path = format!("./downloads/{}_{}", payload.id, payload.name);
+        if std::fs::exists(&path).is_ok_and(|exists| exists) {
+            return Some(path);
+        }
+    
+        let subscription = connection.subscription_builder()
+            .on_error(move |_ctx, _err| {
+                inner.lock().unwrap().downloading.retain(|d| d.file != payload.id);
+            }).subscribe(format!("SELECT * from file f WHERE f.id = {}", payload.id));
+    
+        println!("Subscription created.");
+        self.downloading.push(DownloadingState { file: payload.id, subscription });
+
+        None
     }
 
     pub fn on_send_pocket(&mut self, lenght: usize, remain: usize) {
@@ -589,6 +635,14 @@ fn get_users(session: State<SessionState>) -> Vec<UserPayload> {
     session.lock().unwrap().get_users()
 }
 
+#[tauri::command]
+fn download_file(payload: FileRefPayload, session: State<SessionState>) -> Option<String> {
+    println!("Downloading file...");
+
+    let inner = session.inner().clone();
+    session.lock().unwrap().download_file(payload, inner)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let mut builder = tauri::Builder::default().plugin(tauri_plugin_dialog::init());
@@ -626,7 +680,8 @@ pub fn run() {
             messages_len,
             get_messages,
             get_users,
-            attach_file
+            attach_file,
+            download_file
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application");
