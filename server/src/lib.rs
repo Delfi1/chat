@@ -76,21 +76,21 @@ pub struct File {
 
 #[reducer]
 pub fn request_stream(ctx: &ReducerContext, name: String, size: u64) -> Result<(), String> {
-    let data = ctx.db.temp_file().insert(TempFile {
+    if ctx.db.request().sender().find(&ctx.sender).is_some() {
+        return Err("Stream is aleready exists".to_string());
+    }
+
+    let temp = ctx.db.temp_file().insert(TempFile {
         id: 0,
         name,
         data: Vec::with_capacity(32768),
         size
     });
 
-    if ctx.db.request().sender().find(&ctx.sender).is_some() {
-        return Err("Stream is aleready exists".to_string());
-    }
-
     ctx.db.request().insert(FileRequest {
         sender: ctx.sender,
         finished: false,
-        file: data.id
+        file: temp.id
     });
 
     Ok(())
@@ -98,7 +98,7 @@ pub fn request_stream(ctx: &ReducerContext, name: String, size: u64) -> Result<(
 
 // Send data pocket
 #[reducer]
-pub fn send_pocket(ctx: &ReducerContext, mut pocket: Vec<u8>) -> Result<(), String> {
+pub fn send_packet(ctx: &ReducerContext, mut pocket: Vec<u8>, end: bool) -> Result<(), String> {
     if get_creds(ctx).is_none() {
         return Err("Not loginned in".to_string());
     };
@@ -115,14 +115,12 @@ pub fn send_pocket(ctx: &ReducerContext, mut pocket: Vec<u8>) -> Result<(), Stri
     let mut file = ctx.db.temp_file().id().find(request.file).unwrap();
     file.data.append(&mut pocket);
 
-    if file.data.len() == file.size as usize {
+    // Update request and temp file
+    if end {
         request.finished = true;
-
-        // Update request and temp file
         ctx.db.request().sender().update(request);
-    } else {
-        ctx.db.temp_file().id().update(file);
     }
+    ctx.db.temp_file().id().update(file);
     
     Ok(())
 }

@@ -8,7 +8,6 @@ import { open } from '@tauri-apps/plugin-dialog';
 import { listen } from '@tauri-apps/api/event';
 import { openPath } from '@tauri-apps/plugin-opener';
 
-// todo: message loading
 
 const props = defineProps<{
   self: UserPayload | undefined
@@ -25,24 +24,28 @@ const Pages = {
 const page = ref(Pages.chat);
 
 const text = ref('');
-function send() {
-  //invoke('send_file');
-  invoke('send_message', { "text": text.value } );
-  text.value = '';
-}
-
-const sending = ref(false);
-const sending_state = ref(0);
+const attached = ref<string | null>(null);
 
 function attach() {
   open().then((path) => {
     console.log(path);
-
-    if (path) {
-      invoke('attach_file', { "path": path });
-    }
+    attached.value = path;
   })
 }
+
+function remove_attach() {
+  attached.value = null;
+}
+
+function send() {
+  //invoke('send_file');
+  invoke('send_message', { "text": text.value, "attached": attached.value } );
+  text.value = '';
+  attached.value = null;
+}
+
+const sending = ref(false);
+const sending_state = ref(0);
 
 function remove(id: number) {
   invoke('remove_message', { "id": id });
@@ -50,6 +53,7 @@ function remove(id: number) {
 
 function download(file: FileRefPayload) {
   invoke<string | null>('download_file', { "payload": file }).then((path) => {
+    console.log(path);
     if (path) { openPath(path) };
   });
 }
@@ -95,16 +99,19 @@ onBeforeMount(() => {
           <div class="messages-box" id="messages-area">
             <Message v-for="message in props.messages" :self="self" :user="sender(props.users, message)" :payload="message" @download="download" @remove="remove"></Message>
           </div>
-          <div class="input-box">
-            <button @click="attach" class="file-input">
-              <i class="pi pi-file-arrow-up"></i>
-            </button>
-            <input placeholder="Send message" v-model="text" v-on:keyup.enter="send"/>
-            <button @click="send">Send</button>
+          <div id="input-box" class="input-box">
+            <p v-if="attached" class="attached-file" @click="remove_attach" v-text="attached"></p>
+            <progress v-if="sending" :value="sending_state" max="100">70 %</progress>
+            <div class="send-box">
+              <button @click="attach" class="file-input">
+                <i class="pi pi-file-arrow-up"></i>
+              </button>
+              <textarea placeholder="Send message" v-model="text" v-on:keyup.enter.exact="send"></textarea>
+              <button @click="send">Send</button>
+            </div>
           </div>
         </div>
         <div class="details">
-          <progress v-if="sending" :value="sending_state" max="100">70 %</progress>
         </div>
       </div>
 
@@ -213,7 +220,6 @@ onBeforeMount(() => {
 .chat-box {
   height: 100%;
   width: 100%;
-  border-radius: 16px;
   background-color: #202329;
   display: flex;
   flex-flow: column;
@@ -227,15 +233,29 @@ onBeforeMount(() => {
 
 .input-box {
   width: 100%;
-  height: 50px;
+  min-height: 70px;
+  position: relative;
+  background-color: #131313;
+}
+
+.input-box p {
+  margin-left: 5px;
+  margin-top: 5px;
+  font-size: 12px;
+}
+
+.input-box p:hover {
+  color: rgb(130, 27, 27);
+}
+
+.send-box {
+  width: 100%;
+  position: absolute;
   display: flex;
+  bottom: 5px;
 }
 
-.input-box input[type="file"] {
-  display: none;
-}
-
-.input-box .file-input {
+.send-box .file-input {
   align-items: center;
   text-align: center;
   align-content: center;
@@ -249,42 +269,44 @@ onBeforeMount(() => {
   border-radius: 12px;
 }
 
-.input-box .file-input i {
+.send-box .file-input i {
   transition: all 0.3s ease;
   font-size: 1.2rem;
 }
 
-.input-box .file-input i:hover {
+.send-box .file-input i:hover {
   color: #6b8afd;
   font-size: 1.1rem;
 }
 
-.input-box .file-input i:active {
+.send-box .file-input i:active {
   color: #587cff;
   font-size: 1rem;
 }
 
-.input-box input {
-  height: 80%;
+.send-box textarea {
+  min-height: 80%;
   width: 80%;
+  overflow-y: hidden;
   background-color: transparent;
   outline: none;
   border: none;
+  resize: none;
 
   margin-left: 15px;
   margin-top: 5px;
+  padding-top: 10px;
   font-size: 16px;
 }
 
-.input-box button {
-  height: 80%;
+.send-box button {
+  width: 60px;
   font-size: 16px;
   background-color: transparent;
-  width: 60px;
   border-radius: 4px;
   padding: 4px;
+  margin-bottom: 10px;
   margin-left: 8px;
-  margin-top: 5px;
 }
 
 /* Chat details - users online, etc */

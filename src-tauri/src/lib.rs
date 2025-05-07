@@ -160,15 +160,17 @@ impl SendFile {
         };
 
         let pocket = self.data.drain(0..Self::POCKET_SIZE.min(self.data.len())).collect();
-        connection.reducers.send_pocket(pocket).expect("Spacetimedb error");
+        connection.reducers.send_packet(pocket, self.data.is_empty()).expect("Spacetimedb error");
     }
-
 }
 
 #[derive(Default)]
-struct AttachedFile(Option<SendFile>);
-type AttachedFileState = Arc<Mutex<AttachedFile>>;
-
+// Current file in stream
+struct SendingFile {
+    file: Option<SendFile>,
+    reducer: Option<RequestUpdateCallbackId>
+}
+type SendingFileState = Arc<Mutex<SendingFile>>;
 
 #[derive(Default)]
 struct ConnectionHandler(Option<std::thread::JoinHandle<()>>);
@@ -282,7 +284,6 @@ impl SessionInner {
 
     /// Load file on inserted
     pub fn on_file_inserted(&mut self, file: &File) {
-        println!("Inserted {}_{}", file.id, file.name);
         let path = format!("./downloads/{}_{}", file.id, file.name);
 
         std::fs::create_dir_all("./downloads/").expect("FS error");
@@ -306,23 +307,22 @@ impl SessionInner {
             return None;
         }
     
-        let path = format!("./downloads/{}_{}", payload.id, payload.name);
+        let path = format!("downloads\\{}_{}", payload.id, payload.name);
         if std::fs::exists(&path).is_ok_and(|exists| exists) {
             return Some(path);
         }
-    
+        
         let subscription = connection.subscription_builder()
             .on_error(move |_ctx, _err| {
                 inner.lock().unwrap().downloading.retain(|d| d.file != payload.id);
             }).subscribe(format!("SELECT * from file f WHERE f.id = {}", payload.id));
     
-        println!("Subscription created.");
         self.downloading.push(DownloadingState { file: payload.id, subscription });
 
         None
     }
 
-    pub fn on_send_pocket(&mut self, lenght: usize, remain: usize) {
+    pub fn on_send_packet(&mut self, lenght: usize, remain: usize) {
         self.app
             .emit("send_status", SendPayload::new(lenght-remain, lenght))
             .expect("Emit error");
@@ -342,7 +342,7 @@ impl SessionInner {
     }
 }
 
-fn register_callbacks(ctx: &DbConnection, session: SessionState, attach: AttachedFileState) {
+fn register_callbacks(ctx: &DbConnection, session: SessionState, sending: SendingFileState) {
     let inner = session.clone();
     ctx.db.user().on_insert(move |_ctx, user| {
         inner.lock().unwrap().on_user_insert(user);
@@ -393,12 +393,12 @@ fn register_callbacks(ctx: &DbConnection, session: SessionState, attach: Attache
     });
 
     let inner = session.clone();
-    let attach_inner = attach.clone();
+    let sending_inner = sending.clone();
     ctx.reducers.on_request_stream(move |ctx, name, size| {
         match &ctx.event.status {
             Status::Committed => {
                 println!("Sending file {}; {} bytes", name, size);
-                let Some(file) = &mut attach_inner.lock().unwrap().0 else {
+                let Some(file) = &mut sending_inner.lock().unwrap().file else {
                     return;
                 };
 
@@ -409,16 +409,16 @@ fn register_callbacks(ctx: &DbConnection, session: SessionState, attach: Attache
     });
 
     let inner = session.clone();
-    let attach_inner = attach.clone();
-    ctx.reducers.on_send_pocket(move |ctx, _data| {
+    let sending_inner = sending.clone();
+    ctx.reducers.on_send_packet(move |ctx, _data: &Vec<u8>, _end| {
         match &ctx.event.status {
             Status::Committed => {
-                let Some(file) = &mut attach_inner.lock().unwrap().0 else {
+                let Some(file) = &mut sending_inner.lock().unwrap().file else {
                     return;
                 };
 
                 file.send(inner.clone());
-                inner.lock().unwrap().on_send_pocket(file.size, file.data.len());
+                inner.lock().unwrap().on_send_packet(file.size, file.data.len());
             },
             _ => ()
         }
@@ -436,7 +436,7 @@ fn subscribe_to_tables(ctx: &DbConnection) {
         .subscribe(["SELECT * FROM user", "SELECT * FROM message", "SELECT * from request r WHERE r.sender = :sender"]);
 }
 
-fn try_connect(addr: Option<String>, session: SessionState, attach: AttachedFileState) {
+fn try_connect(addr: Option<String>, session: SessionState, sending: SendingFileState) {
     let on_connect_inner = session.clone();
     let on_disconnect_inner = session.clone();
 
@@ -468,7 +468,7 @@ fn try_connect(addr: Option<String>, session: SessionState, attach: AttachedFile
     match res {
         Ok(connection) => {
             // Setup spacetime callbacks, get tables
-            register_callbacks(&connection, session.clone(), attach);
+            register_callbacks(&connection, session.clone(), sending);
             subscribe_to_tables(&connection);
 
             connection.run_threaded();
@@ -484,7 +484,7 @@ fn try_connect(addr: Option<String>, session: SessionState, attach: AttachedFile
 fn connect(
     addr: Option<String>,
     session: State<SessionState>,
-    attach: State<AttachedFileState>,
+    sending: State<SendingFileState>,
     connect_handler: State<ConnectionState>,
 ) {
     if let Some(connection) = session.lock().unwrap().connection.take() {
@@ -503,8 +503,8 @@ fn connect(
 
     // Connect to STDB in thread
     let session_inner = session.inner().clone();
-    let attached_inner = attach.inner().clone();
-    let handler = std::thread::spawn(move || try_connect(addr, session_inner, attached_inner));
+    let sending_inner = sending.inner().clone();
+    let handler = std::thread::spawn(move || try_connect(addr, session_inner, sending_inner));
 
     connect_handler.lock().unwrap().0 = Some(handler);
 }
@@ -554,41 +554,49 @@ fn signup(name: String, password: String, session: State<SessionState>) {
 }
 
 #[tauri::command]
-fn attach_file(path: PathBuf, attach: State<AttachedFileState>) -> std::result::Result<(), String> {
-    let send_file = SendFile::new(path)?;
-    println!("Attached file: {}", send_file.name);
-
-    attach.lock().unwrap().0 = Some(send_file);
-
-    Ok(())
-}
-
-#[tauri::command]
-fn send_message(text: String, reply: Option<u32>, attach: State<AttachedFileState>, session: State<SessionState>) {
+fn send_message(
+    text: String, reply: Option<u32>,
+    attached: Option<String>, 
+    sending: State<SendingFileState>, 
+    session: State<SessionState>
+) -> std::result::Result<(), String> {
     let Some(connection) = &session.lock().unwrap().connection else {
-        return;
+        return Err("Not connected".to_string());
     };
 
-    if let Some(file) = &attach.lock().unwrap().0 {
-        // On request is finished
-        let attach_inner = attach.inner().clone();
-        connection.db.request().on_update(move |ctx, _, request| {
+    if sending.lock().unwrap().file.is_some() {
+        return Err("File is sending".to_string());
+    }
+
+    if let Some(path) = attached {
+        let file = SendFile::new(path.into())?;
+    
+        // On request is finished callback
+        let sending_inner = sending.inner().clone();
+        let reducer = connection.db.request().on_update(move |ctx, _, request| {
             if request.finished {
                 ctx.reducers
                     .send_message(text.clone(), reply)
-                    .expect("Spacetime error"); 
+                    .expect("Spacetime error");
 
-                attach_inner.lock().unwrap().0 = None;
+                sending_inner.lock().unwrap().file = None;
+                let reducer = sending_inner.lock().unwrap().reducer.take().unwrap();
+                ctx.db.request().remove_on_update(reducer);
             }
         });
         
         connection.reducers.request_stream(file.name.clone(), file.size as u64).expect("Spacetime error");
+
+        sending.lock().unwrap().file = Some(file);
+        sending.lock().unwrap().reducer = Some(reducer);
     } else {
         connection
             .reducers
             .send_message(text, reply)
             .expect("Spacetime error");
     }
+
+    Ok(())
 }
 
 #[tauri::command]
@@ -637,8 +645,6 @@ fn get_users(session: State<SessionState>) -> Vec<UserPayload> {
 
 #[tauri::command]
 fn download_file(payload: FileRefPayload, session: State<SessionState>) -> Option<String> {
-    println!("Downloading file...");
-
     let inner = session.inner().clone();
     session.lock().unwrap().download_file(payload, inner)
 }
@@ -668,7 +674,7 @@ pub fn run() {
         })
         .plugin(tauri_plugin_opener::init())
         .manage(Arc::new(Mutex::new(ConnectionHandler::default())))
-        .manage(Arc::new(Mutex::new(AttachedFile::default())))
+        .manage(Arc::new(Mutex::new(SendingFile::default())))
         .invoke_handler(tauri::generate_handler![
             connect,
             disconnect,
@@ -680,7 +686,6 @@ pub fn run() {
             messages_len,
             get_messages,
             get_users,
-            attach_file,
             download_file
         ])
         .build(tauri::generate_context!())

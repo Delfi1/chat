@@ -19,7 +19,7 @@ pub mod remove_message_reducer;
 pub mod request_stream_reducer;
 pub mod request_table;
 pub mod send_message_reducer;
-pub mod send_pocket_reducer;
+pub mod send_packet_reducer;
 pub mod signup_reducer;
 pub mod temp_file_table;
 pub mod temp_file_type;
@@ -50,7 +50,7 @@ pub use request_stream_reducer::{
 };
 pub use request_table::*;
 pub use send_message_reducer::{send_message, set_flags_for_send_message, SendMessageCallbackId};
-pub use send_pocket_reducer::{send_pocket, set_flags_for_send_pocket, SendPocketCallbackId};
+pub use send_packet_reducer::{send_packet, set_flags_for_send_packet, SendPacketCallbackId};
 pub use signup_reducer::{set_flags_for_signup, signup, SignupCallbackId};
 pub use temp_file_table::*;
 pub use temp_file_type::TempFile;
@@ -73,7 +73,7 @@ pub enum Reducer {
     RemoveMessage { id: u32 },
     RequestStream { name: String, size: u64 },
     SendMessage { text: String, reply: Option<u32> },
-    SendPocket { pocket: Vec<u8> },
+    SendPacket { pocket: Vec<u8>, end: bool },
     Signup { name: String, password: String },
 }
 
@@ -91,7 +91,7 @@ impl __sdk::Reducer for Reducer {
             Reducer::RemoveMessage { .. } => "remove_message",
             Reducer::RequestStream { .. } => "request_stream",
             Reducer::SendMessage { .. } => "send_message",
-            Reducer::SendPocket { .. } => "send_pocket",
+            Reducer::SendPacket { .. } => "send_packet",
             Reducer::Signup { .. } => "signup",
         }
     }
@@ -133,9 +133,9 @@ impl TryFrom<__ws::ReducerCallInfo<__ws::BsatnFormat>> for Reducer {
                 )?
                 .into(),
             ),
-            "send_pocket" => Ok(
-                __sdk::parse_reducer_args::<send_pocket_reducer::SendPocketArgs>(
-                    "send_pocket",
+            "send_packet" => Ok(
+                __sdk::parse_reducer_args::<send_packet_reducer::SendPacketArgs>(
+                    "send_packet",
                     &value.args,
                 )?
                 .into(),
