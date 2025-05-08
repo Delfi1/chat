@@ -12,6 +12,7 @@ pub struct Message {
     pub id: u32,
     pub sender: u32,
     pub reply: Option<u32>,
+    pub edited: Option<__sdk::Timestamp>,
     pub sent: __sdk::Timestamp,
     pub text: String,
     pub file: Option<FileRef>,

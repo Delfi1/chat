@@ -11,6 +11,7 @@ interface MessagePayload {
     id: number,
     sender: number,
     sent: number,
+    edited: number | null,
     text: string,
     file: FileRefPayload | null
 }

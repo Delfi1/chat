@@ -29,8 +29,9 @@ const attached = ref<string | null>(null);
 
 function attach() {
   open().then((path) => {
-    console.log(path);
-    attached.value = path;
+    if (path) {
+      attached.value = path;
+    }
   })
 }
 
@@ -52,9 +53,12 @@ function remove(id: number) {
   invoke('remove_message', { "id": id });
 }
 
+function edit(id: number, text: string) {
+  invoke('edit_message', { "id": id, "text": text });
+}
+
 function download(file: FileRefPayload) {
   invoke<string | null>('download_file', { "payload": file }).then((path) => {
-    console.log(path);
     if (path) { openPath(path) };
   });
 }
@@ -103,7 +107,7 @@ onBeforeMount(() => {
       <div v-if="page == Pages.chat" class="chat-page">
         <div class="chat-box">
           <div class="messages-box" id="messages-area">
-            <Message v-for="message in props.messages" :self="self" :user="sender(props.users, message)" :payload="message" @download="download" @remove="remove"></Message>
+            <Message v-for="message in props.messages" :self="self" :user="sender(props.users, message)" :payload="message" @download="download" @edit="edit" @remove="remove"></Message>
           </div>
           <div id="input-box" class="input-box">
             <ProgressBar v-if="sending" :value="sending_state" />
@@ -141,9 +145,8 @@ onBeforeMount(() => {
 .p-progressbar {
   width: 140px;
   max-height: 12px;
-  margin-left: 10px;
+  margin-left: 12px;
   margin-top: 5px;
-  padding-left: 2px;
 }
 
 .left-menu {

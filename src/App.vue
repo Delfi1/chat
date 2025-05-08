@@ -127,7 +127,7 @@ onBeforeMount(() => {
   });
 
 
-  listen('users_updated', () => {
+  listen('user_updated', () => {
     update_lists();
   });
 
@@ -136,7 +136,7 @@ onBeforeMount(() => {
     update_lists();
   });
 
-  listen('messages_updated', () => {
+  listen('message_updated', () => {
     update_lists();
   });
 

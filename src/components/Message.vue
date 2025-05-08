@@ -5,6 +5,7 @@
   import File from './File.vue';
 
   import ContextMenu from 'primevue/contextmenu';
+  import { writeText } from '@tauri-apps/plugin-clipboard-manager';
 
   const props = defineProps<{
     self: UserPayload | undefined,
@@ -15,19 +16,35 @@
   import { openUrl } from '@tauri-apps/plugin-opener';
 
   function copy_text() {
-
+    writeText(props.payload.text);
   };
+
+  const editing = ref(false);
+  const edited_text = ref(props.payload.text);
+  function edit() {
+    editing.value = true;
+  }
+
+  function update() {
+    editing.value = false;
+    emit('edit', props.payload.id, edited_text.value);
+  }
+
+  function cancel() {
+    editing.value = false;
+    edited_text.value = props.payload.text;
+  }
 
   // Message context menus
   const menu = ref();
   const owner_items = ref([
     { label: 'Remove', icon: 'pi pi-trash', command: () => emit("remove", props.payload.id) },
-    { label: 'Copy text', icon: 'pi pi-copy', command: () => copy_text },
-    { label: 'Edit', icon: 'pi pi-file-edit' }
+    { label: 'Copy text', icon: 'pi pi-copy', command: copy_text },
+    { label: 'Edit', icon: 'pi pi-file-edit', command: edit }
   ]);
 
   const items = ref([
-    { label: 'Copy text', icon: 'pi pi-copy', command: () => copy_text },
+    { label: 'Copy text', icon: 'pi pi-copy', command: copy_text },
   ]);
 
   function onRightClick(event: MouseEvent) {
@@ -36,15 +53,18 @@
 
   // time formatter
   function time(): string {
-    var date = new Date(props.payload.sent);
     var current = new Date();
+    var time = props.payload.edited == null ? props.payload.sent : props.payload.edited;
+    var date = new Date(time);
+    var info = props.payload.edited == null ? '' : 'edited ';
 
     // if today
     if (current.toLocaleDateString() == date.toLocaleDateString()) {
-      return date.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+      return info + date.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
     }
     
-    return date.toLocaleDateString();
+    return info + date.toLocaleDateString();
+
   }
 
   function is_owner(): boolean {
@@ -82,7 +102,8 @@
     <ContextMenu ref="menu" :model="owner_items" />
     <div class="message">
       <p class="name" v-text="props.user?.name"></p>
-      <div @click="on_click" v-html="marked(props.payload.text)" class="text"></div>
+      <div v-if="!editing" @click="on_click" v-html="marked(props.payload.text)" class="text"></div>
+      <textarea v-if="editing" v-model="edited_text" class="editor" v-on:keyup.enter.exact="update" v-on:keyup.escape.exact="cancel"></textarea>
       <File v-if="payload.file" @click="emit('download', payload.file)" :payload="payload.file"></File>
       <div class="time" v-text="time()"></div>
     </div>
@@ -95,10 +116,6 @@
   clear: both;
   position: relative;
   z-index: 1;
-}
-
-a.p-contextmenu-item-link:hover {
-  color: red;
 }
 
 .message-container .message {
@@ -180,7 +197,7 @@ a.p-contextmenu-item-link:hover {
 
 .time {
   color: #d6d6d6;
-  font-size: 10px;
+  font-size: 11px;
 }
 
 .sent .time {
@@ -189,6 +206,14 @@ a.p-contextmenu-item-link:hover {
 
 .text p {
   white-space: pre-wrap;
+}
+
+.message .editor {
+  width: 100%;
+  padding: 5px;
+  height: 50px;
+  resize: none;
+  background-color: #131313;
 }
 
 </style>

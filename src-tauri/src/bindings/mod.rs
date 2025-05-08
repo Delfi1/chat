@@ -7,6 +7,7 @@ use spacetimedb_sdk::__codegen::{self as __sdk, __lib, __sats, __ws};
 pub mod client_connected_reducer;
 pub mod client_disconnected_reducer;
 pub mod credentials_table;
+pub mod edit_message_reducer;
 pub mod file_ref_type;
 pub mod file_request_type;
 pub mod file_table;
@@ -34,6 +35,7 @@ pub use client_disconnected_reducer::{
     client_disconnected, set_flags_for_client_disconnected, ClientDisconnectedCallbackId,
 };
 pub use credentials_table::*;
+pub use edit_message_reducer::{edit_message, set_flags_for_edit_message, EditMessageCallbackId};
 pub use file_ref_type::FileRef;
 pub use file_request_type::FileRequest;
 pub use file_table::*;
@@ -68,6 +70,7 @@ pub use user_type::User;
 pub enum Reducer {
     ClientConnected,
     ClientDisconnected,
+    EditMessage { id: u32, text: String },
     Login { name: String, password: String },
     Logout,
     RemoveMessage { id: u32 },
@@ -86,6 +89,7 @@ impl __sdk::Reducer for Reducer {
         match self {
             Reducer::ClientConnected => "client_connected",
             Reducer::ClientDisconnected => "client_disconnected",
+            Reducer::EditMessage { .. } => "edit_message",
             Reducer::Login { .. } => "login",
             Reducer::Logout => "logout",
             Reducer::RemoveMessage { .. } => "remove_message",
@@ -108,6 +112,13 @@ impl TryFrom<__ws::ReducerCallInfo<__ws::BsatnFormat>> for Reducer {
                 client_disconnected_reducer::ClientDisconnectedArgs,
             >("client_disconnected", &value.args)?
             .into()),
+            "edit_message" => Ok(
+                __sdk::parse_reducer_args::<edit_message_reducer::EditMessageArgs>(
+                    "edit_message",
+                    &value.args,
+                )?
+                .into(),
+            ),
             "login" => Ok(__sdk::parse_reducer_args::<login_reducer::LoginArgs>(
                 "login",
                 &value.args,

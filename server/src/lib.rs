@@ -24,7 +24,6 @@ pub struct User {
     #[unique]
     name: String,
     online: Vec<Identity>,
-    // todo: reply
 }
 
 #[table(name=message, public)]
@@ -34,6 +33,7 @@ pub struct Message {
     id: u32,
     sender: u32,
     reply: Option<u32>,
+    edited: Option<Timestamp>,
     sent: Timestamp,
     text: String,
     file: Option<FileRef>,
@@ -224,6 +224,7 @@ pub fn send_message(ctx: &ReducerContext, text: String, reply: Option<u32>) -> R
         sender: creds.user_id,
         sent: ctx.timestamp,
         reply,
+        edited: None,
         text,
         file
     });
@@ -251,6 +252,35 @@ pub fn remove_message(ctx: &ReducerContext, id: u32) -> Result<(), String> {
     }
     
     ctx.db.message().id().delete(id);
+    Ok(())
+}
+
+#[reducer]
+pub fn edit_message(ctx: &ReducerContext, id: u32, text: String) -> Result<(), String> {
+    let text = text.trim().to_string();
+    let Some(creds) = get_creds(ctx) else {
+        return Err("Not loginned in".to_string());
+    };
+
+    let user = ctx.db.user().id().find(creds.user_id).unwrap();
+    let Some(mut message) = ctx.db.message().id().find(id) else {
+        return Err("Message not found".to_string());
+    };
+    
+    if !(user.id == message.sender) {
+        return Err("Permission denied".to_string());
+    }
+
+    if text.is_empty() && message.file.is_none() {
+        return Err("Empty message".to_string());
+    }
+
+    if message.text != text {
+        message.text = text;
+        message.edited = Some(ctx.timestamp);
+    }
+
+    ctx.db.message().id().update(message);
     Ok(())
 }
 
