@@ -1,79 +1,82 @@
 <script setup lang="ts">
-import { onBeforeMount, ref } from 'vue';
-import { UserPayload, MessagePayload, sender, SendPayload, FileRefPayload } from './api';
-import Message from './components/Message.vue';
-//import User from './components/User.vue';
-import { invoke } from '@tauri-apps/api/core';
-import { open } from '@tauri-apps/plugin-dialog';
-import { listen } from '@tauri-apps/api/event';
-import { openPath } from '@tauri-apps/plugin-opener';
+  import { onBeforeMount, ref } from 'vue';
+  import { UserPayload, MessagePayload, sender, SendPayload } from './api';
+  import Message from './components/Message.vue';
+  //import User from './components/User.vue';
+  import { invoke } from '@tauri-apps/api/core';
+  import { open } from '@tauri-apps/plugin-dialog';
+  import { listen } from '@tauri-apps/api/event';
 
-import ProgressBar from 'primevue/progressbar';
+  import ProgressBar from 'primevue/progressbar';
+  import ContextMenu from 'primevue/contextmenu';
+  import { MenuItem } from "primevue/menuitem";
 
-const props = defineProps<{
-  self: UserPayload | undefined
-  users: UserPayload[],
-  messages: MessagePayload[]
-}>();
-const emit = defineEmits(['logout']);
 
-const Pages = {
-  chat: 'chat',
-  account: 'account',
-  settings: 'settings'
-};
-const page = ref(Pages.chat);
+  const props = defineProps<{
+    self: UserPayload | undefined
+    users: UserPayload[],
+    messages: MessagePayload[]
+  }>();
+  const emit = defineEmits(['logout']);
 
-const text = ref('');
-const attached = ref<string | null>(null);
+  const menu = ref();
+  const Pages = {
+    chat: 'chat',
+    account: 'account',
+    settings: 'settings'
+  };
+  const page = ref(Pages.chat);
 
-function attach() {
-  open().then((path) => {
-    if (path) {
-      attached.value = path;
-    }
-  })
-}
+  const text = ref('');
+  const attached = ref<string | null>(null);
 
-function remove_attach() {
-  attached.value = null;
-}
+  function attach() {
+    open().then((path) => {
+      if (path) {
+        attached.value = path;
+      }
+    })
+  }
 
-function send() {
-  //invoke('send_file');
-  invoke('send_message', { "text": text.value, "attached": attached.value } );
-  text.value = '';
-  attached.value = null;
-}
+  function remove_attach() {
+    attached.value = null;
+  }
 
-const sending = ref(false);
-const sending_state = ref(0);
+  function send() {
+    //invoke('send_file');
+    invoke('send_message', { "text": text.value, "attached": attached.value } );
+    text.value = '';
+    attached.value = null;
+  }
 
-function remove(id: number) {
-  invoke('remove_message', { "id": id });
-}
+  const sending = ref(false);
+  const sending_state = ref(0);
 
-function edit(id: number, text: string) {
-  invoke('edit_message', { "id": id, "text": text });
-}
+  function remove(id: number) {
+    invoke('remove_message', { "id": id });
+  }
 
-function download(file: FileRefPayload) {
-  invoke<string | null>('download_file', { "payload": file }).then((path) => {
-    if (path) { openPath(path) };
-  });
-}
+  function edit(id: number, text: string) {
+    invoke('edit_message', { "id": id, "text": text });
+  }
 
-onBeforeMount(() => {
-  listen<SendPayload>('send_status', (event) => {
-    if (event.payload.ready != event.payload.lenght) {
+  const menu_items = ref<MenuItem[]>();
+  function open_menu(event: MouseEvent, items: MenuItem[]) {
+    menu_items.value = items;
+    menu.value.show(event);
+  }
+
+
+  onBeforeMount(() => {
+    listen<SendPayload>('send_status', (event) => {
       sending.value = true;
-    } else {
-      // Wait before hide progressbar
-      setTimeout(() => { sending.value = false; }, 1200);
-    }
-    sending_state.value = Math.floor((event.payload.ready / event.payload.lenght) * 100);
+      if (event.payload.ready = event.payload.lenght) {
+        // Wait before hide progressbar
+        setTimeout(() => { sending.value = false; }, 1200);
+      }
+      sending_state.value = Math.floor((event.payload.ready / event.payload.lenght) * 100);
+    });
   });
-});
 </script>
 
 <template>
@@ -104,10 +107,11 @@ onBeforeMount(() => {
     </div>
     
     <div class="central-box">
+      <ContextMenu ref="menu" :model="menu_items"/>
       <div v-if="page == Pages.chat" class="chat-page">
         <div class="chat-box">
           <div class="messages-box" id="messages-area">
-            <Message v-for="message in props.messages" :self="self" :user="sender(props.users, message)" :payload="message" @download="download" @edit="edit" @remove="remove"></Message>
+            <Message v-for="message in props.messages" :self="self" :user="sender(props.users, message)" :payload="message" @open_menu="open_menu" @edit="edit" @remove="remove"></Message>
           </div>
           <div id="input-box" class="input-box">
             <ProgressBar v-if="sending" :value="sending_state" />

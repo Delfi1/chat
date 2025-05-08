@@ -69,6 +69,7 @@ pub struct MessagePayload {
     pub sender: u32,
     pub sent: u128,
     pub edited: Option<u128>,
+    pub reply: Option<u32>,
     pub text: String,
     pub file: Option<FileRefPayload>,
 }
@@ -95,6 +96,7 @@ impl MessagePayload {
             sent,
             edited,
             text: message.text,
+            reply: message.reply,
             file,
         }
     }
@@ -324,16 +326,15 @@ impl SessionInner {
         };
 
         // If is downloading...
-        if self
-            .downloading
-            .iter()
-            .find(|d| d.file == payload.id)
-            .is_some()
-        {
+        if self.downloading.iter()
+            .find(|d| d.file == payload.id).is_some() {
             return None;
         }
 
-        file_path(payload.clone())?;
+        if let Some(path) = file_path(payload.clone()) {
+            return Some(path);
+        }
+        
         let subscription = connection
             .subscription_builder()
             .on_error(move |_ctx, _err| {

@@ -1,9 +1,22 @@
 <script setup lang="ts">
+import { ref } from 'vue';
+import { invoke } from '@tauri-apps/api/core';
+
 import { FileRefPayload } from '../api';
 
 const props = defineProps<{
   payload: FileRefPayload,
 }>();
+const emit = defineEmits(['open_menu', 'download', 'open', 'reveal']);
+
+const download_item = ref([
+  { label: 'Download', icon: 'pi pi-download', command: () => emit('download', props.payload) },
+]);
+
+const exists_items = ref([
+  { label: 'Open', icon: 'pi pi-file-o', command: () => emit('open', filepath.value) },
+  { label: 'Reveal', icon: 'pi pi-folder-open', command: () => emit('reveal', filepath.value) }
+]);
 
 function formatSize(size: number): string {
   var i = size == 0 ? 0 : Math.floor(Math.log(size) / Math.log(1024));
@@ -12,11 +25,21 @@ function formatSize(size: number): string {
 
   return `${data} ${pref}`;
 }
+
+const filepath = ref<string | null>(null);
+
+function onFileClick(event: MouseEvent) {
+  invoke<string | null>('file_path', { "payload": props.payload }).then((path) => {
+    var items = path == null ? download_item : exists_items;
+
+    filepath.value = path;
+    emit("open_menu", event, items.value);
+  });
+};
 </script>
 
 <template>
-  <div class="file">
-    <i></i>
+  <div class="file" @contextmenu="onFileClick">
     <p class="filename" v-text="props.payload.name"></p>
     <p class="filesize" v-text="formatSize(props.payload.size)"></p>
   </div>
@@ -25,8 +48,8 @@ function formatSize(size: number): string {
 <style>
 .file {
   min-width: 40px;
-  margin-top: 4px;
-  height: 40px;
+  margin-top: 6px;
+  min-height: 40px;
   padding: 4px;
   background-color: #222;
 }
@@ -36,7 +59,6 @@ p.filename {
   font-size: 12px;
   color: #fff;
 }
-
 
 .filesize {
   user-select: none;
