@@ -1,8 +1,10 @@
 <script setup lang="ts">
-  //import { ref } from 'vue';
+  import { ref } from "vue";
   import { MessagePayload, UserPayload } from '../api';
   import { marked } from 'marked';
   import File from './File.vue';
+
+  import ContextMenu from 'primevue/contextmenu';
 
   const props = defineProps<{
     self: UserPayload | undefined,
@@ -11,6 +13,26 @@
   }>();
   const emit = defineEmits(['edit', 'reply', 'remove', 'download']);
   import { openUrl } from '@tauri-apps/plugin-opener';
+
+  function copy_text() {
+
+  };
+
+  // Message context menus
+  const menu = ref();
+  const owner_items = ref([
+    { label: 'Remove', icon: 'pi pi-trash', command: () => emit("remove", props.payload.id) },
+    { label: 'Copy text', icon: 'pi pi-copy', command: () => copy_text },
+    { label: 'Edit', icon: 'pi pi-file-edit' }
+  ]);
+
+  const items = ref([
+    { label: 'Copy text', icon: 'pi pi-copy', command: () => copy_text },
+  ]);
+
+  function onRightClick(event: MouseEvent) {
+    menu.value.show(event);
+  };
 
   // time formatter
   function time(): string {
@@ -29,17 +51,6 @@
     return props.user?.id == props.self?.id;
   }
 
-  /*
-  function can_remove(): boolean {
-    return is_owner() || props.self?.id_admin as boolean;
-  }
-
-  function remove() {
-    console.log("Remove", props.payload.id);
-    emit("remove", props.payload.id);
-  }
-  */
-
   // prevent url opening in href
   function on_click(event: MouseEvent) {
     var target = event.target;
@@ -56,7 +67,8 @@
 </script>
 
 <template>
-  <div v-if="!is_owner()" class="message-container received">
+  <div v-if="!is_owner()" class="message-container received" @contextmenu="onRightClick">
+    <ContextMenu ref="menu" :model="items" />
     <div class="avatar"></div>
     <div class="message">
       <p class="name" v-text="props.user?.name"></p>
@@ -66,7 +78,8 @@
     </div>
   </div>
   
-  <div v-if="is_owner()" class="message-container sent">
+  <div v-if="is_owner()" class="message-container sent" @contextmenu="onRightClick">
+    <ContextMenu ref="menu" :model="owner_items" />
     <div class="message">
       <p class="name" v-text="props.user?.name"></p>
       <div @click="on_click" v-html="marked(props.payload.text)" class="text"></div>
@@ -84,6 +97,10 @@
   z-index: 1;
 }
 
+a.p-contextmenu-item-link:hover {
+  color: red;
+}
+
 .message-container .message {
   white-space: initial;
   position: relative;
@@ -95,6 +112,19 @@
   font-size: 15px;
   max-width: 60%;
   float: left;
+}
+
+.message-container .name {
+  user-select: none;
+}
+
+.message-container .time {
+  user-select: none;
+}
+
+.message-container:last-child {
+  display: block;
+  padding-bottom: anchor-size(height);
 }
 
 .name {
@@ -155,6 +185,10 @@
 
 .sent .time {
   text-align: end;
+}
+
+.text p {
+  white-space: pre-wrap;
 }
 
 </style>

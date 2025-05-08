@@ -8,6 +8,7 @@ import { open } from '@tauri-apps/plugin-dialog';
 import { listen } from '@tauri-apps/api/event';
 import { openPath } from '@tauri-apps/plugin-opener';
 
+import ProgressBar from 'primevue/progressbar';
 
 const props = defineProps<{
   self: UserPayload | undefined
@@ -60,8 +61,13 @@ function download(file: FileRefPayload) {
 
 onBeforeMount(() => {
   listen<SendPayload>('send_status', (event) => {
-    sending.value = event.payload.ready != event.payload.lenght;
-    sending_state.value = (event.payload.ready / event.payload.lenght) * 100;
+    if (event.payload.ready != event.payload.lenght) {
+      sending.value = true;
+    } else {
+      // Wait before hide progressbar
+      setTimeout(() => { sending.value = false; }, 1200);
+    }
+    sending_state.value = Math.floor((event.payload.ready / event.payload.lenght) * 100);
   });
 });
 </script>
@@ -100,8 +106,8 @@ onBeforeMount(() => {
             <Message v-for="message in props.messages" :self="self" :user="sender(props.users, message)" :payload="message" @download="download" @remove="remove"></Message>
           </div>
           <div id="input-box" class="input-box">
+            <ProgressBar v-if="sending" :value="sending_state" />
             <p v-if="attached" class="attached-file" @click="remove_attach" v-text="attached"></p>
-            <progress v-if="sending" :value="sending_state" max="100">70 %</progress>
             <div class="send-box">
               <button @click="attach" class="file-input">
                 <i class="pi pi-file-arrow-up"></i>
@@ -120,7 +126,6 @@ onBeforeMount(() => {
       </div>
 
       <div v-if="page == Pages.settings" class="settings-page">
-      
       </div>
     </div>
   </div>
@@ -133,10 +138,19 @@ onBeforeMount(() => {
   display: flex;
 }
 
+.p-progressbar {
+  width: 140px;
+  max-height: 12px;
+  margin-left: 10px;
+  margin-top: 5px;
+  padding-left: 2px;
+}
+
 .left-menu {
   width: 80px;
   height: 100%;
   display: inline;
+  user-select: none;
 }
 
 .left-menu .logo {
@@ -236,6 +250,7 @@ onBeforeMount(() => {
   min-height: 70px;
   position: relative;
   background-color: #131313;
+  
 }
 
 .input-box p {

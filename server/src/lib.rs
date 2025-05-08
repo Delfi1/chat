@@ -69,6 +69,7 @@ pub struct FileRef {
 
 #[table(name=file, public)]
 pub struct File {
+    #[primary_key]
     id: u32,
     name: String,
     data: Vec<u8>
@@ -244,6 +245,11 @@ pub fn remove_message(ctx: &ReducerContext, id: u32) -> Result<(), String> {
         return Err("Permission denied".to_string());
     }
 
+    // Remove attached file
+    if let Some(file_ref) = message.file {
+        ctx.db.file().id().delete(file_ref.id);
+    }
+    
     ctx.db.message().id().delete(id);
     Ok(())
 }
@@ -275,6 +281,8 @@ pub fn client_connected(ctx: &ReducerContext) {
 #[reducer(client_disconnected)]
 pub fn client_disconnected(ctx: &ReducerContext) {
     update_online(ctx, false);
+
+    // Close request if exists
     if let Some(request) = ctx.db.request().sender().find(ctx.sender) {
         ctx.db.request().sender().delete(ctx.sender);
         ctx.db.temp_file().id().delete(request.file);

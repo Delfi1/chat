@@ -129,7 +129,7 @@ pub struct SendFile {
 
 impl SendFile {
     // N kilobytes
-    const N: usize = 512;
+    const N: usize = 2048;
     const POCKET_SIZE: usize = 1024 * Self::N;
 
     fn path_name(path: &PathBuf) -> Option<String> {

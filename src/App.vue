@@ -121,21 +121,22 @@ onBeforeMount(() => {
     connect_state();
   });
 
-  // Users updates
-  listen('users_updated', () => {
-    update_lists();
-  });
-
-  // Messages updates
-  listen('messages_updated', () => {
-    update_lists();
-  });
-
+  // Users
   listen('user_inserted', () => {
     update_lists();
   });
 
+
+  listen('users_updated', () => {
+    update_lists();
+  });
+
+  // Messages
   listen('message_inserted', () => {
+    update_lists();
+  });
+
+  listen('messages_updated', () => {
     update_lists();
   });
 
@@ -191,10 +192,6 @@ onBeforeMount(() => {
 * {
   font-family: Archivo;
   color: #fff;
-}
-
-button, h1, h2, h3, h4, h5, p {
-  user-select: none;
 }
 
 .main {

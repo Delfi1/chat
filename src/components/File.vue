@@ -37,4 +37,9 @@ p.filename {
   color: #fff;
 }
 
+
+.filesize {
+  user-select: none;
+}
+
 </style>
