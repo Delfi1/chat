@@ -1,9 +1,14 @@
 <script setup lang="ts">
-import { ref } from 'vue';
-import { UserPayload, MessagePayload, sender } from './api';
+import { onBeforeMount, ref } from 'vue';
+import { UserPayload, MessagePayload, sender, SendPayload, FileRefPayload } from './api';
 import Message from './components/Message.vue';
-import User from './components/User.vue';
+//import User from './components/User.vue';
 import { invoke } from '@tauri-apps/api/core';
+import { open } from '@tauri-apps/plugin-dialog';
+import { listen } from '@tauri-apps/api/event';
+import { openPath } from '@tauri-apps/plugin-opener';
+
+import ProgressBar from 'primevue/progressbar';
 
 const props = defineProps<{
   self: UserPayload | undefined
@@ -11,45 +16,120 @@ const props = defineProps<{
   messages: MessagePayload[]
 }>();
 const emit = defineEmits(['logout']);
+
+const Pages = {
+  chat: 'chat',
+  account: 'account',
+  settings: 'settings'
+};
+const page = ref(Pages.chat);
+
 const text = ref('');
+const attached = ref<string | null>(null);
+
+function attach() {
+  open().then((path) => {
+    if (path) {
+      attached.value = path;
+    }
+  })
+}
+
+function remove_attach() {
+  attached.value = null;
+}
 
 function send() {
-  invoke('send_message', { "text": text.value } );
+  //invoke('send_file');
+  invoke('send_message', { "text": text.value, "attached": attached.value } );
   text.value = '';
+  attached.value = null;
 }
+
+const sending = ref(false);
+const sending_state = ref(0);
 
 function remove(id: number) {
   invoke('remove_message', { "id": id });
 }
 
-function all_online(): UserPayload[] {
-  return props.users.filter((u) => u.online);
+function edit(id: number, text: string) {
+  invoke('edit_message', { "id": id, "text": text });
 }
+
+function download(file: FileRefPayload) {
+  invoke<string | null>('download_file', { "payload": file }).then((path) => {
+    if (path) { openPath(path) };
+  });
+}
+
+onBeforeMount(() => {
+  listen<SendPayload>('send_status', (event) => {
+    if (event.payload.ready != event.payload.lenght) {
+      sending.value = true;
+    } else {
+      // Wait before hide progressbar
+      setTimeout(() => { sending.value = false; }, 1200);
+    }
+    sending_state.value = Math.floor((event.payload.ready / event.payload.lenght) * 100);
+  });
+});
 </script>
 
 <template>
   <div class="container">
-    <div class="control-box">
-      <div class="main-controls">
-        <button @click="emit('logout')">Logout</button>
+    <div class="left-menu">
+      <div class="logo">
+        <h1>De</h1>
       </div>
-      <div class="users-list">
-        <h2>Online users: {{ all_online().length }}</h2>
-        <User v-for="user in all_online()" :payload="user"></User>
-      </div>
-    </div>
+      <div class="menu-buttons">
+        <div class="top">
+          <div class="menu-btn">
+            <button @click="page = Pages.chat"><i class="pi pi-comments"></i></button>
+            <p>Chat</p>
+          </div>
 
-    <div class="main-box">
-      <div class="messages-box" id="messages-area">
-        <Message v-for="message in props.messages" :self="self" :user="sender(props.users, message)" :payload="message" @remove="remove"></Message>
-      </div>
-      <div class="input-panel">
-        <div class="input-box">
-          <div class="line-box">
-            <input v-model="text" placeholder="Send message" v-on:keyup.enter="send" />
-            <button @click="send">Send</button>
+          <div class="menu-btn">
+            <button @click="page = Pages.account"><i class="pi pi-user"></i></button>
+            <p>Account</p>
           </div>
         </div>
+        <div class="bottom">
+          <div class="menu-btn">
+            <button @click="page = Pages.settings"><i class="pi pi-cog"></i></button>
+            <p>Settings</p>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <div class="central-box">
+      <div v-if="page == Pages.chat" class="chat-page">
+        <div class="chat-box">
+          <div class="messages-box" id="messages-area">
+            <Message v-for="message in props.messages" :self="self" :user="sender(props.users, message)" :payload="message" @download="download" @edit="edit" @remove="remove"></Message>
+          </div>
+          <div id="input-box" class="input-box">
+            <ProgressBar v-if="sending" :value="sending_state" />
+            <p v-if="attached" class="attached-file" @click="remove_attach" v-text="attached"></p>
+            <div class="send-box">
+              <button @click="attach" class="file-input">
+                <i class="pi pi-file-arrow-up"></i>
+              </button>
+              <textarea placeholder="Send message" v-model="text" v-on:keyup.enter.exact="send"></textarea>
+              <button @click="send">Send</button>
+            </div>
+          </div>
+        </div>
+        <div class="details">
+        </div>
+      </div>
+
+      <div v-if="page == Pages.account" class="account-page">
+        <button @click="emit('logout')">Logout</button>
+      </div>
+
+      <div v-if="page == Pages.settings" class="settings-page">
       </div>
     </div>
   </div>
@@ -62,111 +142,203 @@ function all_online(): UserPayload[] {
   display: flex;
 }
 
-.container button {
-  background-color: #0091ff;
-  margin: 4px;
-  transition: all 0.4s ease-in-out;
-  transition-property: color, background-color;
-  color: #080710;
-  border: none;
-  border-radius: 5px;
-  cursor: pointer;
+.p-progressbar {
+  width: 140px;
+  max-height: 12px;
+  margin-left: 12px;
+  margin-top: 5px;
 }
 
-.container button:hover {
-  background-color: #0065b1;
-  color: #fff;
-}
-
-.control-box {
+.left-menu {
+  width: 80px;
   height: 100%;
-  flex: 0.3;
-  margin-left: 10px;
-  margin-right: 10px;
   display: inline;
+  user-select: none;
 }
 
-.control-box button {
+.left-menu .logo {
   margin: 10px;
-  padding: 5px;
+  width: 55px;
+  height: 55px;
+  border-radius: 12px;
+  display: grid;
+  align-content: center;
 }
 
-.main-controls {
-  width: 100%;
-  height: 25%;
-
-  position: relative;
-  width: 100%;
-  top: 1.5%;
-
-  border-radius: 4px;
-  background-color: #62bbff;
+.left-menu .logo h1 {
+  font-weight: 500;
+  text-align: center;
+  transition: all 0.6s ease;
 }
 
-.users-list {
-  position: relative;
-  width: 100%;
-  height: 70%;
-  top: 2.5%;
-  padding: 5px;
-  border-radius: 4px;
-  background-color: #87cbff;
+.left-menu .logo h1:hover {
+  font-weight: 600;
+  font-size: x-large;
+  color: #6b8afd;
 }
 
-/* Main part */
-.main-box {
+.left-menu .menu-buttons {
+  margin-top: 10px;
+  width: 100%;
+}
+
+.menu-buttons .menu-btn {
   height: 100%;
-  display: inline;
-  flex: 1;
+  align-content: center;
+  text-align: center;
+  font-size: 12px;
+}
+
+.menu-buttons .bottom {
+  position: absolute;
+  bottom: 0;
+}
+
+.menu-buttons .menu-btn {
+  margin: 15px;
+}
+
+.menu-btn button {
+  width: 45px;
+  height: 45px;
+  background-color: transparent;
+  outline: none;
+  border: none;
+  border-radius: 12px;
+}
+
+.menu-btn button i {
+  font-size: 1.4rem;
+  transition: all 0.3s ease;
+}
+
+.menu-btn button i:hover {
+  font-size: 1.3rem;
+  color: #6b8afd;
+}
+
+.menu-btn button i:active {
+  color: #587cff;
+  font-size: 1.1rem
+}
+
+.central-box {
+  width: 100%;
+  height: 100%;
+}
+
+.chat-page {
+  width: 100%;
+  height: 100%;
+  display: flex;
+}
+
+/* Chat page Central panel, chat */
+.chat-box {
+  height: 100%;
+  width: 100%;
+  background-color: #202329;
+  display: flex;
+  flex-flow: column;
 }
 
 .messages-box {
   width: 100%;
-
-  height: 90%;
+  height: 100%;
   overflow-y: scroll;
 }
 
-.input-panel {
-  width: 100%;
-  height: 8%;
-  display: grid;
-  place-items: center;
-}
-
 .input-box {
-  width: 90%;
-  height: 90%;
-  display: grid;
-  place-items: center;
-  background-color: #b6dfff;
-}
-
-.line-box {
   width: 100%;
-  display: flex;
+  min-height: 70px;
+  position: relative;
+  background-color: #131313;
+  
 }
 
-.line-box input {
-  width: 90%;
-  font-size: 16px;
-  height: 60%;
+.input-box p {
+  margin-left: 5px;
+  margin-top: 5px;
+  font-size: 12px;
+}
+
+.input-box p:hover {
+  color: rgb(130, 27, 27);
+}
+
+.send-box {
+  width: 100%;
+  position: absolute;
+  display: flex;
+  bottom: 5px;
+}
+
+.send-box .file-input {
+  align-items: center;
+  text-align: center;
+  align-content: center;
+  width: 35px;
+  height: 35px;
+  padding: 4px;
+  margin-left: 15px;
+  margin-top: 5px;
+  background-color: #131313;
+  border: #131313;
+  border-radius: 12px;
+}
+
+.send-box .file-input i {
+  transition: all 0.3s ease;
+  font-size: 1.2rem;
+}
+
+.send-box .file-input i:hover {
+  color: #6b8afd;
+  font-size: 1.1rem;
+}
+
+.send-box .file-input i:active {
+  color: #587cff;
+  font-size: 1rem;
+}
+
+.send-box textarea {
+  min-height: 80%;
+  width: 80%;
+  overflow-y: hidden;
+  background-color: transparent;
   outline: none;
   border: none;
+  resize: none;
+
+  margin-left: 15px;
+  margin-top: 5px;
+  padding-top: 10px;
+  font-size: 16px;
+}
+
+.send-box button {
+  width: 60px;
+  font-size: 16px;
   background-color: transparent;
-  align-self: center;
-  margin-left: 20px;
-  margin-right: 15px;
+  border-radius: 4px;
+  padding: 4px;
+  margin-bottom: 10px;
+  margin-left: 8px;
 }
 
-.line-box input::placeholder {
-  color: #3f627d;
+/* Chat details - users online, etc */
+.details {
+  height: 100%;
+  width: 300px;
+  right: 0;
 }
 
-.line-box button {
-  width: 7%;
-  font-size: 12px;
-  height: 30px;
+.account-page button {
+  width: 60px;
+  height: 25px;
+  margin: 10px;
+  background-color: #202329;
 }
 
 </style>

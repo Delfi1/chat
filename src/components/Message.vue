@@ -1,49 +1,74 @@
 <script setup lang="ts">
-  import { ref } from 'vue';
+  import { ref } from "vue";
   import { MessagePayload, UserPayload } from '../api';
   import { marked } from 'marked';
+  import File from './File.vue';
+
+  import ContextMenu from 'primevue/contextmenu';
+  import { writeText } from '@tauri-apps/plugin-clipboard-manager';
 
   const props = defineProps<{
     self: UserPayload | undefined,
     user: UserPayload | undefined,
     payload: MessagePayload,
   }>();
-  const emit = defineEmits(['edit', 'reply', 'remove']);
+  const emit = defineEmits(['edit', 'reply', 'remove', 'download']);
   import { openUrl } from '@tauri-apps/plugin-opener';
-  const mouseHover = ref(false);
+
+  function copy_text() {
+    writeText(props.payload.text);
+  };
+
+  const editing = ref(false);
+  const edited_text = ref(props.payload.text);
+  function edit() {
+    editing.value = true;
+  }
+
+  function update() {
+    editing.value = false;
+    emit('edit', props.payload.id, edited_text.value);
+  }
+
+  function cancel() {
+    editing.value = false;
+    edited_text.value = props.payload.text;
+  }
+
+  // Message context menus
+  const menu = ref();
+  const owner_items = ref([
+    { label: 'Remove', icon: 'pi pi-trash', command: () => emit("remove", props.payload.id) },
+    { label: 'Copy text', icon: 'pi pi-copy', command: copy_text },
+    { label: 'Edit', icon: 'pi pi-file-edit', command: edit }
+  ]);
+
+  const items = ref([
+    { label: 'Copy text', icon: 'pi pi-copy', command: copy_text },
+  ]);
+
+  function onRightClick(event: MouseEvent) {
+    menu.value.show(event);
+  };
 
   // time formatter
-  function time(unix: number): string {
-    var date = new Date(unix);
+  function time(): string {
     var current = new Date();
+    var time = props.payload.edited == null ? props.payload.sent : props.payload.edited;
+    var date = new Date(time);
+    var info = props.payload.edited == null ? '' : 'edited ';
 
     // if today
     if (current.toLocaleDateString() == date.toLocaleDateString()) {
-      return date.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+      return info + date.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
     }
     
-    return date.toLocaleDateString();
+    return info + date.toLocaleDateString();
+
   }
 
   function is_owner(): boolean {
     return props.user?.id == props.self?.id;
-  }
-
-  function can_remove(): boolean {
-    return is_owner() || props.self?.id_admin as boolean;
-  }
-
-  function remove() {
-    console.log("Remove", props.payload.id);
-    emit("remove", props.payload.id);
-  }
-
-  function reply() {
-
-  }
-
-  function edit() {
-
   }
 
   // prevent url opening in href
@@ -62,79 +87,133 @@
 </script>
 
 <template>
-  <div @mouseover="mouseHover = true" @mouseleave="mouseHover = false" class="message">
-    <div class="under-info">
-      <h2> {{ props.user?.name }} </h2>
-      <p> {{ time(props.payload.sent) }} </p>
-      <div v-if="mouseHover" class="controls">
-        <button v-if="can_remove()" @click="remove"><i class="pi pi-trash"></i></button>
-        <button @click="reply"><i class="pi pi-reply"></i></button>
-        <button v-if="is_owner()" @click="edit"><i class="pi pi-pencil"></i></button>
-      </div>
+  <div v-if="!is_owner()" class="message-container received" @contextmenu="onRightClick">
+    <ContextMenu ref="menu" :model="items" />
+    <div class="avatar"></div>
+    <div class="message">
+      <p class="name" v-text="props.user?.name"></p>
+      <div @click="on_click" v-html="marked(props.payload.text)" class="text"></div>
+      <File v-if="payload.file" @click="emit('download', payload.file)" :payload="payload.file"></File>
+      <div class="time" v-text="time()"></div>
     </div>
-    <div @click="on_click" v-html="marked(props.payload.text)" class="text"></div>
   </div>
+  
+  <div v-if="is_owner()" class="message-container sent" @contextmenu="onRightClick">
+    <ContextMenu ref="menu" :model="owner_items" />
+    <div class="message">
+      <p class="name" v-text="props.user?.name"></p>
+      <div v-if="!editing" @click="on_click" v-html="marked(props.payload.text)" class="text"></div>
+      <textarea v-if="editing" v-model="edited_text" class="editor" v-on:keyup.enter.exact="update" v-on:keyup.escape.exact="cancel"></textarea>
+      <File v-if="payload.file" @click="emit('download', payload.file)" :payload="payload.file"></File>
+      <div class="time" v-text="time()"></div>
+    </div>
+    <div class="avatar"></div>
+</div>
 </template>
 
 <style>
-
-.message {
-  width: 100%;
-  padding-left: 5px;
-  padding-top: 10px;
-  padding-bottom: 10px;
-  margin-top: 5px;
-}
-
-.message .text {
-  font-size: 16;
-  -webkit-user-select: initial;
-  -moz-user-select: -moz-all;
-  -o-user-select: all;
-  user-select: all;
-}
-
-.message .controls {
+.message-container {
+  clear: both;
   position: relative;
-  right: 10px;
-  top: -12px;
-  width: 150px;
-  height: 32px;
-  padding-right: 3px;
-  padding-left: 3px;
-  background-color: #3facff;
-  border-radius: 10px;
-  display: flexbox;
-  align-items: center;
+  z-index: 1;
 }
 
-.controls button {
-  float: right;
-  width: 15px;
-  padding: 4px;
-  margin: 2px;  
-  width: 25px;
-  right: 0px;
-}
-
-.message:hover {
-  background-color: #c6e6ff;
-}
-
-.message p {
-  inline-size: 90%;
-  width: 80%;
+.message-container .message {
   white-space: initial;
+  position: relative;
   overflow-wrap: anywhere;
-  margin-left: 10px;
+  padding: 8px;
+  margin: 8px 8px;
+  line-height: 18px;
+  min-width: 80px;
+  font-size: 15px;
+  max-width: 60%;
+  float: left;
 }
 
-.under-info {
-  display: flex;
+.message-container .name {
+  user-select: none;
 }
 
-.under-info p {
-  margin: 5px;
+.message-container .time {
+  user-select: none;
+}
+
+.message-container:last-child {
+  display: block;
+  padding-bottom: anchor-size(height);
+}
+
+.name {
+  margin-top: 1px;
+  color: #fff;
+}
+
+.received .name {
+  margin-left: 2px;
+  margin-bottom: 2px;
+}
+
+.sent .name {
+  text-align: end;
+  margin-right: 2px;
+  margin-bottom: 2px;
+} 
+
+.message:after {
+  position: absolute;
+  content: "";
+  width: 0;
+  height: 0;
+  border-style: solid;
+}
+
+.received .message {
+  margin-left: 16px;
+  border-radius: 0px 5px 5px 5px;
+  background-color: #2e343d;
+}
+
+.received .message:after {
+  border-width: 0px 10px 10px 0;
+  border-color: transparent #2e343d transparent transparent;
+  top: 0;
+  left: -8px;
+}
+
+.sent .message {
+  background-color: #6b8afd;
+  margin-right: 16px;
+  border-radius: 5px 5px 0px 5px;
+  float: right;
+}
+
+.sent .message:after {
+  border-width: 10px 0px 0px 10px;
+  border-color: transparent transparent transparent #6b8afd;
+  bottom: 0;
+  right: -8px;
+}
+
+.time {
+  color: #d6d6d6;
+  font-size: 11px;
+}
+
+.sent .time {
+  text-align: end;
+}
+
+.text p {
+  white-space: pre-wrap;
+}
+
+.message .editor {
+  width: 100%;
+  padding: 5px;
+  height: 50px;
+  resize: none;
+  background-color: #131313;
 }
 
 </style>

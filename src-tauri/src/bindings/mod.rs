@@ -7,13 +7,23 @@ use spacetimedb_sdk::__codegen::{self as __sdk, __lib, __sats, __ws};
 pub mod client_connected_reducer;
 pub mod client_disconnected_reducer;
 pub mod credentials_table;
+pub mod edit_message_reducer;
+pub mod file_ref_type;
+pub mod file_request_type;
+pub mod file_table;
+pub mod file_type;
 pub mod login_reducer;
 pub mod logout_reducer;
 pub mod message_table;
 pub mod message_type;
 pub mod remove_message_reducer;
+pub mod request_stream_reducer;
+pub mod request_table;
 pub mod send_message_reducer;
+pub mod send_packet_reducer;
 pub mod signup_reducer;
+pub mod temp_file_table;
+pub mod temp_file_type;
 pub mod user_credentials_type;
 pub mod user_table;
 pub mod user_type;
@@ -25,6 +35,11 @@ pub use client_disconnected_reducer::{
     client_disconnected, set_flags_for_client_disconnected, ClientDisconnectedCallbackId,
 };
 pub use credentials_table::*;
+pub use edit_message_reducer::{edit_message, set_flags_for_edit_message, EditMessageCallbackId};
+pub use file_ref_type::FileRef;
+pub use file_request_type::FileRequest;
+pub use file_table::*;
+pub use file_type::File;
 pub use login_reducer::{login, set_flags_for_login, LoginCallbackId};
 pub use logout_reducer::{logout, set_flags_for_logout, LogoutCallbackId};
 pub use message_table::*;
@@ -32,8 +47,15 @@ pub use message_type::Message;
 pub use remove_message_reducer::{
     remove_message, set_flags_for_remove_message, RemoveMessageCallbackId,
 };
+pub use request_stream_reducer::{
+    request_stream, set_flags_for_request_stream, RequestStreamCallbackId,
+};
+pub use request_table::*;
 pub use send_message_reducer::{send_message, set_flags_for_send_message, SendMessageCallbackId};
+pub use send_packet_reducer::{send_packet, set_flags_for_send_packet, SendPacketCallbackId};
 pub use signup_reducer::{set_flags_for_signup, signup, SignupCallbackId};
+pub use temp_file_table::*;
+pub use temp_file_type::TempFile;
 pub use user_credentials_type::UserCredentials;
 pub use user_table::*;
 pub use user_type::User;
@@ -48,10 +70,13 @@ pub use user_type::User;
 pub enum Reducer {
     ClientConnected,
     ClientDisconnected,
+    EditMessage { id: u32, text: String },
     Login { name: String, password: String },
     Logout,
     RemoveMessage { id: u32 },
+    RequestStream { name: String, size: u64 },
     SendMessage { text: String, reply: Option<u32> },
+    SendPacket { pocket: Vec<u8>, end: bool },
     Signup { name: String, password: String },
 }
 
@@ -64,10 +89,13 @@ impl __sdk::Reducer for Reducer {
         match self {
             Reducer::ClientConnected => "client_connected",
             Reducer::ClientDisconnected => "client_disconnected",
+            Reducer::EditMessage { .. } => "edit_message",
             Reducer::Login { .. } => "login",
             Reducer::Logout => "logout",
             Reducer::RemoveMessage { .. } => "remove_message",
+            Reducer::RequestStream { .. } => "request_stream",
             Reducer::SendMessage { .. } => "send_message",
+            Reducer::SendPacket { .. } => "send_packet",
             Reducer::Signup { .. } => "signup",
         }
     }
@@ -84,6 +112,13 @@ impl TryFrom<__ws::ReducerCallInfo<__ws::BsatnFormat>> for Reducer {
                 client_disconnected_reducer::ClientDisconnectedArgs,
             >("client_disconnected", &value.args)?
             .into()),
+            "edit_message" => Ok(
+                __sdk::parse_reducer_args::<edit_message_reducer::EditMessageArgs>(
+                    "edit_message",
+                    &value.args,
+                )?
+                .into(),
+            ),
             "login" => Ok(__sdk::parse_reducer_args::<login_reducer::LoginArgs>(
                 "login",
                 &value.args,
@@ -98,9 +133,20 @@ impl TryFrom<__ws::ReducerCallInfo<__ws::BsatnFormat>> for Reducer {
                 remove_message_reducer::RemoveMessageArgs,
             >("remove_message", &value.args)?
             .into()),
+            "request_stream" => Ok(__sdk::parse_reducer_args::<
+                request_stream_reducer::RequestStreamArgs,
+            >("request_stream", &value.args)?
+            .into()),
             "send_message" => Ok(
                 __sdk::parse_reducer_args::<send_message_reducer::SendMessageArgs>(
                     "send_message",
+                    &value.args,
+                )?
+                .into(),
+            ),
+            "send_packet" => Ok(
+                __sdk::parse_reducer_args::<send_packet_reducer::SendPacketArgs>(
+                    "send_packet",
                     &value.args,
                 )?
                 .into(),
@@ -125,7 +171,10 @@ impl TryFrom<__ws::ReducerCallInfo<__ws::BsatnFormat>> for Reducer {
 #[doc(hidden)]
 pub struct DbUpdate {
     credentials: __sdk::TableUpdate<UserCredentials>,
+    file: __sdk::TableUpdate<File>,
     message: __sdk::TableUpdate<Message>,
+    request: __sdk::TableUpdate<FileRequest>,
+    temp_file: __sdk::TableUpdate<TempFile>,
     user: __sdk::TableUpdate<User>,
 }
 
@@ -138,7 +187,12 @@ impl TryFrom<__ws::DatabaseUpdate<__ws::BsatnFormat>> for DbUpdate {
                 "credentials" => {
                     db_update.credentials = credentials_table::parse_table_update(table_update)?
                 }
+                "file" => db_update.file = file_table::parse_table_update(table_update)?,
                 "message" => db_update.message = message_table::parse_table_update(table_update)?,
+                "request" => db_update.request = request_table::parse_table_update(table_update)?,
+                "temp_file" => {
+                    db_update.temp_file = temp_file_table::parse_table_update(table_update)?
+                }
                 "user" => db_update.user = user_table::parse_table_update(table_update)?,
 
                 unknown => {
@@ -169,8 +223,17 @@ impl __sdk::DbUpdate for DbUpdate {
         diff.credentials = cache
             .apply_diff_to_table::<UserCredentials>("credentials", &self.credentials)
             .with_updates_by_pk(|row| &row.user_id);
+        diff.file = cache
+            .apply_diff_to_table::<File>("file", &self.file)
+            .with_updates_by_pk(|row| &row.id);
         diff.message = cache
             .apply_diff_to_table::<Message>("message", &self.message)
+            .with_updates_by_pk(|row| &row.id);
+        diff.request = cache
+            .apply_diff_to_table::<FileRequest>("request", &self.request)
+            .with_updates_by_pk(|row| &row.sender);
+        diff.temp_file = cache
+            .apply_diff_to_table::<TempFile>("temp_file", &self.temp_file)
             .with_updates_by_pk(|row| &row.id);
         diff.user = cache
             .apply_diff_to_table::<User>("user", &self.user)
@@ -185,7 +248,10 @@ impl __sdk::DbUpdate for DbUpdate {
 #[doc(hidden)]
 pub struct AppliedDiff<'r> {
     credentials: __sdk::TableAppliedDiff<'r, UserCredentials>,
+    file: __sdk::TableAppliedDiff<'r, File>,
     message: __sdk::TableAppliedDiff<'r, Message>,
+    request: __sdk::TableAppliedDiff<'r, FileRequest>,
+    temp_file: __sdk::TableAppliedDiff<'r, TempFile>,
     user: __sdk::TableAppliedDiff<'r, User>,
 }
 
@@ -204,7 +270,10 @@ impl<'r> __sdk::AppliedDiff<'r> for AppliedDiff<'r> {
             &self.credentials,
             event,
         );
+        callbacks.invoke_table_row_callbacks::<File>("file", &self.file, event);
         callbacks.invoke_table_row_callbacks::<Message>("message", &self.message, event);
+        callbacks.invoke_table_row_callbacks::<FileRequest>("request", &self.request, event);
+        callbacks.invoke_table_row_callbacks::<TempFile>("temp_file", &self.temp_file, event);
         callbacks.invoke_table_row_callbacks::<User>("user", &self.user, event);
     }
 }
@@ -782,7 +851,10 @@ impl __sdk::SpacetimeModule for RemoteModule {
 
     fn register_tables(client_cache: &mut __sdk::ClientCache<Self>) {
         credentials_table::register_table(client_cache);
+        file_table::register_table(client_cache);
         message_table::register_table(client_cache);
+        request_table::register_table(client_cache);
+        temp_file_table::register_table(client_cache);
         user_table::register_table(client_cache);
     }
 }

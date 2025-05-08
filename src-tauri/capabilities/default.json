@@ -7,7 +7,14 @@
   ],
   "permissions": [
     "core:default",
+    "store:default",
+    "dialog:default",
     "opener:default",
+    "clipboard-manager:allow-write-text",
+    {
+      "identifier": "opener:allow-open-path",
+      "allow": [{ "path": "**/*" }]
+    },
     "core:window:allow-set-size",
     "core:window:allow-set-max-size",
     "core:window:allow-set-min-size",

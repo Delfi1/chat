@@ -16,9 +16,9 @@
 
 <style>
 .user {
-    width: 100%;
-    height: 30px;
-    margin-left: 10px;
-    color: black;
+  width: 100%;
+  height: 30px;
+  margin-left: 10px;
+  color: black;
 }
 </style>

@@ -3,7 +3,7 @@ import { Window, LogicalSize } from '@tauri-apps/api/window';
 import { onBeforeMount, ref } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
-
+import { LazyStore } from '@tauri-apps/plugin-store';
 import 'primeicons/primeicons.css'
 
 import ConnectPage from './ConnectPage.vue';
@@ -23,10 +23,13 @@ const users = ref([] as UserPayload[]);
 
 const messages_len = ref(0);
 const messages = ref([] as MessagePayload[]);
+const store = new LazyStore('user.json');
 
 function connect(addr: string) {
   invoke('connect', {"addr": addr});
+  store.set('addr', addr);
   connecting.value = true;
+  console.log("connect");
 }
 
 function login(name: string, password: string) {
@@ -44,42 +47,53 @@ function logout() {
   self.value = undefined;
 }
 
+function scroll_area() {
+  var area = document.getElementById("messages-area") as HTMLElement;
+  if (area.scrollTo) {
+    area.scrollTo(0, area.scrollHeight);
+  }
+}
+
 function update_lists() {
   invoke<UserPayload[]>('get_users').then((result) => {
     users.value = result;
   });
 
-  invoke<MessagePayload[]>('get_messages', {"start": 0, "end": 100}).then((result) => {
+  invoke<MessagePayload[]>('get_messages', {"start": 0, "end": 10000}).then((result) => {
     messages.value = result;
-    var area = document.getElementById("messages-area") as HTMLElement;
-    area.scrollTo(0, area.scrollHeight);
+    scroll_area();
   });
 
   invoke<number>('messages_len').then((result) => {
     messages_len.value = result;
-    var area = document.getElementById("messages-area") as HTMLElement;
-    area.scrollTo(0, area.scrollHeight);
+    scroll_area();
   });
 }
 
 function main_state() {
-  appWindow.setSize(new LogicalSize(800, 600));
-  appWindow.setMinSize(new LogicalSize(800, 600));
-  appWindow.setMaxSize(undefined);
   appWindow.setResizable(true);
   appWindow.setMaximizable(true);
+  appWindow.setMaxSize(undefined);
+  appWindow.setMinSize(new LogicalSize(1100, 600));
+  appWindow.setSize(new LogicalSize(1100, 600));
 
   connected.value = true;
   connecting.value = false;
   connectErrorMsg.value = '';
 }
 
+function load_connect() {
+  store.get<string>('addr').then((addr) => {
+    if (addr) { connect(addr) };
+  });
+}
+
 function connect_state() {
-  appWindow.setSize(new LogicalSize(400, 600));
-  appWindow.setMinSize(undefined);
-  appWindow.setMaxSize(new LogicalSize(400, 600));
   appWindow.setResizable(false);
   appWindow.setMaximizable(false);
+  appWindow.setMinSize(undefined);
+  appWindow.setMaxSize(new LogicalSize(400, 600));
+  appWindow.setSize(new LogicalSize(400, 600));
 
   connected.value = false;
   loginned.value = false;
@@ -107,21 +121,22 @@ onBeforeMount(() => {
     connect_state();
   });
 
-  // Users updates
-  listen('users_updated', () => {
-    update_lists();
-  });
-
-  // Messages updates
-  listen('messages_updated', () => {
-    update_lists();
-  });
-
+  // Users
   listen('user_inserted', () => {
     update_lists();
   });
 
+
+  listen('user_updated', () => {
+    update_lists();
+  });
+
+  // Messages
   listen('message_inserted', () => {
+    update_lists();
+  });
+
+  listen('message_updated', () => {
     update_lists();
   });
 
@@ -142,6 +157,9 @@ onBeforeMount(() => {
     update_lists();
   });
 
+  // load address and if exists - connect 
+  load_connect();
+  
   // Set current state as connect
   connect_state();
 });
@@ -156,24 +174,31 @@ onBeforeMount(() => {
 </template>
 
 <style>
+@import url('https://fonts.googleapis.com/css2?family=Archivo:ital,wght@0,100..900;1,100..900&display=swap');
+
+/* Colors palette */
+/*
+#131313
+#2e333d
+#6b8afd
+#ffffff
+*/
+
 *, *:before, *:after{
   padding: 0;
   margin: 0;
   box-sizing: border-box; 
 }
 * {
-  font-family: Avenir;
-  -webkit-user-select: none;
-  -moz-user-select: -moz-none;
-  -o-user-select: none;
-  user-select: none;
+  font-family: Archivo;
+  color: #fff;
 }
+
 .main {
   width: 100%;
   height: 100%;
   position: absolute;
-  background-color: #dff1ff;
-
+  background-color: #131313;
 }
 
 </style>

@@ -28,8 +28,8 @@ function connect() {
 
 <style>
 .loader {
-  border: 8px solid #f3f3f3;
-  border-top: 8px solid #7dc7ff;
+  border: 8px solid #2e333d;
+  border-top: 8px solid #6b8afd;
   border-radius: 50%;
   margin-top: 10px;
   width: 60px;
@@ -47,8 +47,8 @@ function connect() {
 .card input{
   height: 24px;
   width: 260px;
-  background-color: rgba(255,255,255,0.07);
-  background: #fff;
+  color: #fff;
+  background: #2e333d;
   border-radius: 3px;
   padding: 0 8px;
   margin-top: 8px;
@@ -64,8 +64,8 @@ function connect() {
   margin-top: 15px;
   margin-bottom: 20px;
   width: 280px;
-  background-color: #ffffff;
-  color: #080710;
+  background-color: #2e333d;
+  color: #fff;
   transition: background-color 0.5s ease;
   padding: 15px 0;
   font-size: 18px;
@@ -74,7 +74,7 @@ function connect() {
   cursor: pointer;
 }
 .card button:hover {
-  background-color: #65bcff;
+  background-color: #19202b;
 }
 
 .card p {
