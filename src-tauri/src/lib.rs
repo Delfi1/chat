@@ -163,19 +163,26 @@ impl SendFile {
         Ok(Self { name, data, size })
     }
 
-    fn send(&mut self, session: SessionState) {
+    fn send(&mut self, session: SessionState) -> usize {
         let Some(connection) = &session.lock().unwrap().connection else {
-            return;
+            return 0;
         };
 
-        let pocket = self
+        if self.data.len() == 0 {
+            return 0;
+        }
+
+        let packet = self
             .data
             .drain(0..Self::POCKET_SIZE.min(self.data.len()))
             .collect();
+
         connection
             .reducers
-            .send_packet(pocket, self.data.is_empty())
+            .send_packet(packet, self.data.is_empty())
             .expect("Spacetimedb error");
+
+        return self.data.len();
     }
 }
 
@@ -314,6 +321,7 @@ impl SessionInner {
         let state = self.downloading.swap_remove(index);
         state.subscription.unsubscribe().expect("Spacetime error");
         self.downloading.retain(|d| d.file != file.id);
+        self.app.emit("on_file_downloaded", file.id).expect("Emit error");
     }
 
     pub fn download_file(
@@ -448,11 +456,11 @@ fn register_callbacks(ctx: &DbConnection, session: SessionState, sending: Sendin
                     return;
                 };
 
-                file.send(inner.clone());
+                let remain = file.send(inner.clone());
                 inner
                     .lock()
                     .unwrap()
-                    .on_send_packet(file.size, file.data.len());
+                    .on_send_packet(file.size, remain);
             }
             _ => (),
         });

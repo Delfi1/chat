@@ -6,6 +6,7 @@ import { FileRefPayload } from '../api';
 
 const props = defineProps<{
   payload: FileRefPayload,
+  downloading: boolean
 }>();
 const emit = defineEmits(['open_menu', 'download', 'open', 'reveal']);
 
@@ -39,7 +40,12 @@ function onFileClick(event: MouseEvent) {
 </script>
 
 <template>
-  <div class="file" @contextmenu="onFileClick">
+  <div v-if="!props.downloading" class="file" @contextmenu="onFileClick">
+    <p class="filename" v-text="props.payload.name"></p>
+    <p class="filesize" v-text="formatSize(props.payload.size)"></p>
+  </div>
+
+  <div v-if="props.downloading" class="downloading-file">
     <p class="filename" v-text="props.payload.name"></p>
     <p class="filesize" v-text="formatSize(props.payload.size)"></p>
   </div>
@@ -52,6 +58,14 @@ function onFileClick(event: MouseEvent) {
   min-height: 40px;
   padding: 4px;
   background-color: #222;
+}
+
+.downloading-file {
+  min-width: 40px;
+  margin-top: 6px;
+  min-height: 40px;
+  padding: 4px;
+  background-color: #2f2f2f;
 }
 
 p.filename {

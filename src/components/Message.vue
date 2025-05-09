@@ -9,16 +9,28 @@
   import { writeText } from '@tauri-apps/plugin-clipboard-manager';
   import { openUrl } from '@tauri-apps/plugin-opener';
   import { MenuItem } from "primevue/menuitem";
+import { listen } from "@tauri-apps/api/event";
 
   const props = defineProps<{
     self: UserPayload | undefined,
     user: UserPayload | undefined,
-    payload: MessagePayload,
+    reply: MessagePayload | undefined,
+    payload: MessagePayload
   }>();
-  const emit = defineEmits(['open_menu', 'edit', 'reply', 'remove']);
+  const emit = defineEmits(['open_menu', 'edit', 'remove', 'reply']);
 
+  const downloading = ref<boolean>(false);
   function download(file: FileRefPayload) {  
-    invoke('download_file', { "payload": file });
+    invoke<string | null>('download_file', { "payload": file }).then((path) => {
+      if (path) { return };
+
+      downloading.value = true;
+      listen<number>("on_file_downloaded", (result) => {
+        if (props.payload.file?.id == result.payload) {
+          downloading.value = false;
+        }
+      });
+    })
   }
 
   function open(path: string) {
@@ -51,9 +63,10 @@
 
   // Message context menus
   const owner_items = ref([
-    { label: 'Remove', icon: 'pi pi-trash', command: () => emit("remove", props.payload.id) },
+    { label: 'Reply', icon: 'pi pi-reply', command: () => emit("reply", props.payload) },
     { label: 'Copy text', icon: 'pi pi-copy', command: copy_text },
-    { label: 'Edit', icon: 'pi pi-file-edit', command: edit }
+    { label: 'Edit', icon: 'pi pi-file-edit', command: edit },
+    { label: 'Remove', icon: 'pi pi-trash', command: () => emit("remove", props.payload.id) },
   ]);
 
   const items = ref([
@@ -85,11 +98,23 @@
     }
     
     return info + date.toLocaleDateString();
-
   }
 
   function is_owner(): boolean {
     return props.user?.id == props.self?.id;
+  }
+
+  // Get reply from message
+  function get_reply(): string {
+    if (props.reply) { 
+      if (props.reply.text.length > 16) {
+        return props.reply.text.slice(0, 16) + "...";
+      } else { 
+        return props.reply.text;
+      }
+    }
+
+    return '';
   }
 
   // prevent url opening in href
@@ -111,19 +136,21 @@
   <div v-if="!is_owner()" class="message-container received" @contextmenu="onReceivedClick">
     <div class="avatar"></div>
     <div class="message">
+      <div v-if="props.reply" class="reply">Replying to: {{ get_reply() }}</div>
       <p class="name" v-text="props.user?.name"></p>
       <div @click="on_click" v-html="marked(props.payload.text)" class="text"></div>
-      <File v-if="payload.file" @open_menu="file_menu" @download="download" @open="open" @reveal="reveal" :payload="payload.file"></File>
+      <File v-if="payload.file" @open_menu="file_menu" :downloading="downloading" @download="download" @open="open" @reveal="reveal" :payload="payload.file"></File>
       <div class="time" v-text="time()"></div>
     </div>
   </div>
   
   <div v-if="is_owner()" class="message-container sent" @contextmenu="onSentClick">
     <div class="message">
+      <div v-if="props.reply" class="reply">Replying to: {{ get_reply() }}</div>
       <p class="name" v-text="props.user?.name"></p>
       <div v-if="!editing" @click="on_click" v-html="marked(props.payload.text)" class="text"></div>
       <textarea v-if="editing" v-model="edited_text" class="editor" v-on:keyup.enter.exact="update" v-on:keyup.escape.exact="cancel"></textarea>
-      <File v-if="payload.file" @open_menu="file_menu" @download="download" @open="open" @reveal="reveal" :payload="payload.file"></File>
+      <File v-if="payload.file" @open_menu="file_menu" :downloading="downloading" @download="download" @open="open" @reveal="reveal" :payload="payload.file"></File>
       <div class="time" v-text="time()"></div>
     </div>
     <div class="avatar"></div>
@@ -133,6 +160,8 @@
 <style>
 .message-container {
   clear: both;
+  width: 100%;
+  height: fit-content;
   position: relative;
   z-index: 1;
 }
@@ -161,6 +190,12 @@
 .message-container:last-child {
   display: block;
   padding-bottom: anchor-size(height);
+}
+
+.reply {
+  text-align: end;
+  color: #d6d6d6;
+  font-size: 10px;
 }
 
 .name {
