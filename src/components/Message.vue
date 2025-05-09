@@ -9,7 +9,7 @@
   import { writeText } from '@tauri-apps/plugin-clipboard-manager';
   import { openUrl } from '@tauri-apps/plugin-opener';
   import { MenuItem } from "primevue/menuitem";
-import { listen } from "@tauri-apps/api/event";
+  import { listen } from "@tauri-apps/api/event";
 
   const props = defineProps<{
     self: UserPayload | undefined,
