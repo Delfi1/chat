@@ -69,6 +69,7 @@ pub struct MessagePayload {
     pub sender: u32,
     pub sent: u128,
     pub edited: Option<u128>,
+    pub reply: Option<u32>,
     pub text: String,
     pub file: Option<FileRefPayload>,
 }
@@ -95,6 +96,7 @@ impl MessagePayload {
             sent,
             edited,
             text: message.text,
+            reply: message.reply,
             file,
         }
     }
@@ -161,19 +163,26 @@ impl SendFile {
         Ok(Self { name, data, size })
     }
 
-    fn send(&mut self, session: SessionState) {
+    fn send(&mut self, session: SessionState) -> usize {
         let Some(connection) = &session.lock().unwrap().connection else {
-            return;
+            return 0;
         };
 
-        let pocket = self
+        if self.data.len() == 0 {
+            return 0;
+        }
+
+        let packet = self
             .data
             .drain(0..Self::POCKET_SIZE.min(self.data.len()))
             .collect();
+
         connection
             .reducers
-            .send_packet(pocket, self.data.is_empty())
+            .send_packet(packet, self.data.is_empty())
             .expect("Spacetimedb error");
+
+        return self.data.len();
     }
 }
 
@@ -312,6 +321,7 @@ impl SessionInner {
         let state = self.downloading.swap_remove(index);
         state.subscription.unsubscribe().expect("Spacetime error");
         self.downloading.retain(|d| d.file != file.id);
+        self.app.emit("on_file_downloaded", file.id).expect("Emit error");
     }
 
     pub fn download_file(
@@ -324,16 +334,15 @@ impl SessionInner {
         };
 
         // If is downloading...
-        if self
-            .downloading
-            .iter()
-            .find(|d| d.file == payload.id)
-            .is_some()
-        {
+        if self.downloading.iter()
+            .find(|d| d.file == payload.id).is_some() {
             return None;
         }
 
-        file_path(payload.clone())?;
+        if let Some(path) = file_path(payload.clone()) {
+            return Some(path);
+        }
+        
         let subscription = connection
             .subscription_builder()
             .on_error(move |_ctx, _err| {
@@ -447,11 +456,11 @@ fn register_callbacks(ctx: &DbConnection, session: SessionState, sending: Sendin
                     return;
                 };
 
-                file.send(inner.clone());
+                let remain = file.send(inner.clone());
                 inner
                     .lock()
                     .unwrap()
-                    .on_send_packet(file.size, file.data.len());
+                    .on_send_packet(file.size, remain);
             }
             _ => (),
         });

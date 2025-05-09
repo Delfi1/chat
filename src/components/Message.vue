@@ -1,19 +1,45 @@
 <script setup lang="ts">
   import { ref } from "vue";
-  import { MessagePayload, UserPayload } from '../api';
+  import { FileRefPayload, MessagePayload, UserPayload } from '../api';
   import { marked } from 'marked';
   import File from './File.vue';
 
-  import ContextMenu from 'primevue/contextmenu';
+  import { invoke } from "@tauri-apps/api/core";
+  import { openPath, revealItemInDir } from '@tauri-apps/plugin-opener';
   import { writeText } from '@tauri-apps/plugin-clipboard-manager';
+  import { openUrl } from '@tauri-apps/plugin-opener';
+  import { MenuItem } from "primevue/menuitem";
+  import { listen } from "@tauri-apps/api/event";
 
   const props = defineProps<{
     self: UserPayload | undefined,
     user: UserPayload | undefined,
-    payload: MessagePayload,
+    reply: MessagePayload | undefined,
+    payload: MessagePayload
   }>();
-  const emit = defineEmits(['edit', 'reply', 'remove', 'download']);
-  import { openUrl } from '@tauri-apps/plugin-opener';
+  const emit = defineEmits(['open_menu', 'edit', 'remove', 'reply']);
+
+  const downloading = ref<boolean>(false);
+  function download(file: FileRefPayload) {  
+    invoke<string | null>('download_file', { "payload": file }).then((path) => {
+      if (path) { return };
+
+      downloading.value = true;
+      listen<number>("on_file_downloaded", (result) => {
+        if (props.payload.file?.id == result.payload) {
+          downloading.value = false;
+        }
+      });
+    })
+  }
+
+  function open(path: string) {
+    openPath(path);
+  }
+
+  function reveal(path: string) {
+    revealItemInDir(path);
+  }
 
   function copy_text() {
     writeText(props.payload.text);
@@ -36,20 +62,28 @@
   }
 
   // Message context menus
-  const menu = ref();
   const owner_items = ref([
-    { label: 'Remove', icon: 'pi pi-trash', command: () => emit("remove", props.payload.id) },
+    { label: 'Reply', icon: 'pi pi-reply', command: () => emit("reply", props.payload) },
     { label: 'Copy text', icon: 'pi pi-copy', command: copy_text },
-    { label: 'Edit', icon: 'pi pi-file-edit', command: edit }
+    { label: 'Edit', icon: 'pi pi-file-edit', command: edit },
+    { label: 'Remove', icon: 'pi pi-trash', command: () => emit("remove", props.payload.id) },
   ]);
 
   const items = ref([
     { label: 'Copy text', icon: 'pi pi-copy', command: copy_text },
   ]);
 
-  function onRightClick(event: MouseEvent) {
-    menu.value.show(event);
+  function onReceivedClick(event: MouseEvent) {
+    emit("open_menu", event, items.value);
   };
+
+  function onSentClick(event: MouseEvent) {
+    emit("open_menu", event, owner_items.value);
+  };
+
+  function file_menu(event: MouseEvent, items: MenuItem[]) {
+    emit("open_menu", event, items);
+  }
 
   // time formatter
   function time(): string {
@@ -64,11 +98,23 @@
     }
     
     return info + date.toLocaleDateString();
-
   }
 
   function is_owner(): boolean {
     return props.user?.id == props.self?.id;
+  }
+
+  // Get reply from message
+  function get_reply(): string {
+    if (props.reply) { 
+      if (props.reply.text.length > 16) {
+        return props.reply.text.slice(0, 16) + "...";
+      } else { 
+        return props.reply.text;
+      }
+    }
+
+    return '';
   }
 
   // prevent url opening in href
@@ -87,24 +133,24 @@
 </script>
 
 <template>
-  <div v-if="!is_owner()" class="message-container received" @contextmenu="onRightClick">
-    <ContextMenu ref="menu" :model="items" />
+  <div v-if="!is_owner()" class="message-container received" @contextmenu="onReceivedClick">
     <div class="avatar"></div>
     <div class="message">
+      <div v-if="props.reply" class="reply">Replying to: {{ get_reply() }}</div>
       <p class="name" v-text="props.user?.name"></p>
       <div @click="on_click" v-html="marked(props.payload.text)" class="text"></div>
-      <File v-if="payload.file" @click="emit('download', payload.file)" :payload="payload.file"></File>
+      <File v-if="payload.file" @open_menu="file_menu" :downloading="downloading" @download="download" @open="open" @reveal="reveal" :payload="payload.file"></File>
       <div class="time" v-text="time()"></div>
     </div>
   </div>
   
-  <div v-if="is_owner()" class="message-container sent" @contextmenu="onRightClick">
-    <ContextMenu ref="menu" :model="owner_items" />
+  <div v-if="is_owner()" class="message-container sent" @contextmenu="onSentClick">
     <div class="message">
+      <div v-if="props.reply" class="reply">Replying to: {{ get_reply() }}</div>
       <p class="name" v-text="props.user?.name"></p>
       <div v-if="!editing" @click="on_click" v-html="marked(props.payload.text)" class="text"></div>
       <textarea v-if="editing" v-model="edited_text" class="editor" v-on:keyup.enter.exact="update" v-on:keyup.escape.exact="cancel"></textarea>
-      <File v-if="payload.file" @click="emit('download', payload.file)" :payload="payload.file"></File>
+      <File v-if="payload.file" @open_menu="file_menu" :downloading="downloading" @download="download" @open="open" @reveal="reveal" :payload="payload.file"></File>
       <div class="time" v-text="time()"></div>
     </div>
     <div class="avatar"></div>
@@ -114,6 +160,8 @@
 <style>
 .message-container {
   clear: both;
+  width: 100%;
+  height: fit-content;
   position: relative;
   z-index: 1;
 }
@@ -142,6 +190,12 @@
 .message-container:last-child {
   display: block;
   padding-bottom: anchor-size(height);
+}
+
+.reply {
+  text-align: end;
+  color: #d6d6d6;
+  font-size: 10px;
 }
 
 .name {
@@ -213,7 +267,7 @@
   padding: 5px;
   height: 50px;
   resize: none;
-  background-color: #131313;
+  background-color: #7794ff;
 }
 
 </style>

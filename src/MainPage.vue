@@ -1,79 +1,93 @@
 <script setup lang="ts">
-import { onBeforeMount, ref } from 'vue';
-import { UserPayload, MessagePayload, sender, SendPayload, FileRefPayload } from './api';
-import Message from './components/Message.vue';
-//import User from './components/User.vue';
-import { invoke } from '@tauri-apps/api/core';
-import { open } from '@tauri-apps/plugin-dialog';
-import { listen } from '@tauri-apps/api/event';
-import { openPath } from '@tauri-apps/plugin-opener';
+  import { onBeforeMount, ref } from 'vue';
+  import { UserPayload, MessagePayload, sender, get_messsage, SendPayload } from './api';
+  import Message from './components/Message.vue';
+  //import User from './components/User.vue';
+  import { invoke } from '@tauri-apps/api/core';
+  import { open } from '@tauri-apps/plugin-dialog';
+  import { listen } from '@tauri-apps/api/event';
 
-import ProgressBar from 'primevue/progressbar';
+  import ProgressBar from 'primevue/progressbar';
+  import ContextMenu from 'primevue/contextmenu';
+  import { MenuItem } from "primevue/menuitem";
 
-const props = defineProps<{
-  self: UserPayload | undefined
-  users: UserPayload[],
-  messages: MessagePayload[]
-}>();
-const emit = defineEmits(['logout']);
+  const props = defineProps<{
+    self: UserPayload | undefined
+    users: UserPayload[],
+    messages: MessagePayload[]
+  }>();
+  const emit = defineEmits(['logout']);
 
-const Pages = {
-  chat: 'chat',
-  account: 'account',
-  settings: 'settings'
-};
-const page = ref(Pages.chat);
+  const menu = ref();
+  const Pages = {
+    chat: 'chat',
+    account: 'account',
+    settings: 'settings'
+  };
+  const page = ref(Pages.chat);
 
-const text = ref('');
-const attached = ref<string | null>(null);
+  const text = ref('');
+  const attached = ref<string | null>(null);
 
-function attach() {
-  open().then((path) => {
-    if (path) {
-      attached.value = path;
-    }
-  })
-}
+  function attach() {
+    open().then((path) => {
+      if (path) {
+        attached.value = path;
+      }
+    })
+  }
 
-function remove_attach() {
-  attached.value = null;
-}
+  function remove_attach() {
+    attached.value = null;
+  }
 
-function send() {
-  //invoke('send_file');
-  invoke('send_message', { "text": text.value, "attached": attached.value } );
-  text.value = '';
-  attached.value = null;
-}
+  function send() {
+    invoke('send_message', { "text": text.value, "reply": replying.value?.id, "attached": attached.value } );
+    
+    text.value = '';
+    replying.value = null;
+    attached.value = null;
+  }
 
-const sending = ref(false);
-const sending_state = ref(0);
+  const replying = ref<MessagePayload | null>(null);
+  function reply(message: MessagePayload) {
+    console.log(message);
+    replying.value = message;
+  }
 
-function remove(id: number) {
-  invoke('remove_message', { "id": id });
-}
+  const sending = ref(false);
+  const sending_state = ref(0);
 
-function edit(id: number, text: string) {
-  invoke('edit_message', { "id": id, "text": text });
-}
+  function remove(id: number) {
+    invoke('remove_message', { "id": id });
+  }
 
-function download(file: FileRefPayload) {
-  invoke<string | null>('download_file', { "payload": file }).then((path) => {
-    if (path) { openPath(path) };
-  });
-}
+  function edit(id: number, text: string) {
+    invoke('edit_message', { "id": id, "text": text });
+  }
 
-onBeforeMount(() => {
-  listen<SendPayload>('send_status', (event) => {
-    if (event.payload.ready != event.payload.lenght) {
+  const menu_items = ref<MenuItem[]>();
+  function open_menu(event: MouseEvent, items: MenuItem[]) {
+    menu_items.value = items;
+    menu.value.show(event);
+  }
+
+  onBeforeMount(() => {
+    listen<SendPayload>('send_status', (event) => {
       sending.value = true;
-    } else {
-      // Wait before hide progressbar
-      setTimeout(() => { sending.value = false; }, 1200);
-    }
-    sending_state.value = Math.floor((event.payload.ready / event.payload.lenght) * 100);
+
+      console.log(event.payload);
+      if (event.payload.ready == event.payload.lenght) {
+        // Wait before hide progressbar
+        setTimeout(() => {
+          sending.value = false;
+          sending_state.value = 0;
+        }, 1200);
+      }
+
+      sending_state.value = Math.floor((event.payload.ready / event.payload.lenght) * 100);
+    });
   });
-});
 </script>
 
 <template>
@@ -104,14 +118,20 @@ onBeforeMount(() => {
     </div>
     
     <div class="central-box">
+      <ContextMenu ref="menu" :model="menu_items"/>
       <div v-if="page == Pages.chat" class="chat-page">
         <div class="chat-box">
           <div class="messages-box" id="messages-area">
-            <Message v-for="message in props.messages" :self="self" :user="sender(props.users, message)" :payload="message" @download="download" @edit="edit" @remove="remove"></Message>
+            <Message v-for="message in props.messages" :self="self" :user="sender(props.users, message)" :payload="message" :reply="get_messsage(props.messages, message.reply)" @open_menu="open_menu" @reply="reply" @edit="edit" @remove="remove"></Message>
           </div>
           <div id="input-box" class="input-box">
-            <ProgressBar v-if="sending" :value="sending_state" />
-            <p v-if="attached" class="attached-file" @click="remove_attach" v-text="attached"></p>
+            <div class="send-data-box">
+              <div v-if="replying" class="replying-box">
+                <p class="reply-message">Replying to: {{ sender(props.users, replying)?.name }}</p>
+              </div>
+              <ProgressBar v-if="sending" :value="sending_state" />
+              <p v-if="attached" class="attached-file" @click="remove_attach" v-text="attached"></p>  
+            </div>
             <div class="send-box">
               <button @click="attach" class="file-input">
                 <i class="pi pi-file-arrow-up"></i>
@@ -233,7 +253,7 @@ onBeforeMount(() => {
   display: flex;
 }
 
-/* Chat page Central panel, chat */
+/* Chat page Central panel, messages */
 .chat-box {
   height: 100%;
   width: 100%;
@@ -245,6 +265,7 @@ onBeforeMount(() => {
 .messages-box {
   width: 100%;
   height: 100%;
+  position: relative;
   overflow-y: scroll;
 }
 
@@ -252,25 +273,44 @@ onBeforeMount(() => {
   width: 100%;
   min-height: 70px;
   position: relative;
+  display: inline;
+  vertical-align: bottom;
   background-color: #131313;
-  
 }
 
-.input-box p {
+.input-box p.attached-file {
   margin-left: 5px;
-  margin-top: 5px;
+  height: 17px;
+  padding-top: 5px;
   font-size: 12px;
+  margin-bottom: 80px;
 }
 
-.input-box p:hover {
+.input-box p.attached-file:hover {
   color: rgb(130, 27, 27);
+}
+
+.input-box p.reply-message {
+  margin-left: 25px;
+}
+
+.replying-box {
+  width: 100%;
+  position: relative;
+  height: 30px;
+  padding-top: 8px;
+}
+
+.send-data-box {
+  width: 100%;
+  margin-bottom: 60px;
 }
 
 .send-box {
   width: 100%;
-  position: absolute;
   display: flex;
-  bottom: 5px;
+  position: absolute;
+  bottom: 0px;
 }
 
 .send-box .file-input {
