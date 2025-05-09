@@ -8,9 +8,9 @@ app.use(PrimeVue, {
   theme: {
     preset: Aura,
     options: {
-        prefix: 'p',
-        darkModeSelector: true,
-        cssLayer: false
+      prefix: 'p',
+      darkModeSelector: true,
+      cssLayer: false
     }
   }
 });
