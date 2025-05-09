@@ -102,6 +102,10 @@ function connect_state() {
   messages.value = [];
 }
 
+function setup() {
+  document.querySelector("html")!.classList.toggle("darkmode");
+}
+
 onBeforeMount(() => {
   listen('on_connect', (_ev) => {
     main_state();
@@ -157,9 +161,9 @@ onBeforeMount(() => {
     update_lists();
   });
 
+  setup();
   // load address and if exists - connect 
   load_connect();
-  
   // Set current state as connect
   connect_state();
 });

@@ -70,6 +70,7 @@
   ]);
 
   const items = ref([
+    { label: 'Reply', icon: 'pi pi-reply', command: () => emit("reply", props.payload) },
     { label: 'Copy text', icon: 'pi pi-copy', command: copy_text },
   ]);
 
