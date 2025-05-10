@@ -2,6 +2,7 @@ use std::{
     path::PathBuf,
     sync::{Arc, Mutex},
 };
+use cpal::traits::{DeviceTrait, HostTrait};
 use tauri::{AppHandle, Emitter, Manager, RunEvent, State};
 use tauri_plugin_updater::UpdaterExt;
 
@@ -198,8 +199,46 @@ type SendingFileState = Arc<Mutex<SendingFile>>;
 struct ConnectionHandler(Option<std::thread::JoinHandle<()>>);
 type ConnectionState = Arc<Mutex<ConnectionHandler>>;
 
+// Cpal voice stream controller
+pub struct VoiceStream {
+    host: cpal::Host,
+    input_device: cpal::Device,
+    output_device: cpal::Device,
+}
+
+impl Default for VoiceStream {
+    /// Setup voice stream data
+    fn default() -> Self {
+        println!("Initializing voice stream...");
+        let host = cpal::default_host();
+        let input_device = host.default_input_device()
+            .expect("No aviable input device");
+        let output_device = host.default_output_device()
+            .expect("No aviable input device");
+        let config = input_device
+            .default_input_config()
+            .expect("Failed to get default input config");
+
+        println!("Input device: {:?}", input_device.name().ok());
+        println!("Output device: {:?}", output_device.name().ok());
+        println!("Format: {:?}", config.sample_format());
+
+        Self {
+            host,
+            input_device,
+            output_device
+        }
+    }
+}
+
+type VoiceStreamState = Arc<Mutex<VoiceStream>>;
+
+#[derive(Default)]
+struct VoiceHandler(Option<std::thread::JoinHandle<()>>);
+type VoiceHandlerState = Arc<Mutex<VoiceHandler>>;
+
 /// Downloads file from server
-pub struct DownloadingState {
+pub struct DownloadingFile {
     file: u32,
     subscription: bindings::SubscriptionHandle,
 }
@@ -208,7 +247,7 @@ pub struct DownloadingState {
 struct SessionInner {
     /// Window events emitter
     pub app: AppHandle,
-    pub downloading: Vec<DownloadingState>,
+    pub downloading: Vec<DownloadingFile>,
     pub connection: Option<DbConnection>,
     pub identity: Option<Identity>,
 }
@@ -354,7 +393,7 @@ impl SessionInner {
             })
             .subscribe(format!("SELECT * from file f WHERE f.id = {}", payload.id));
 
-        self.downloading.push(DownloadingState {
+        self.downloading.push(DownloadingFile {
             file: payload.id,
             subscription,
         });
@@ -725,6 +764,7 @@ pub fn run() {
     let mut builder = tauri::Builder::default()
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_dialog::init());
+    
     #[cfg(desktop)]
     {
         builder = builder.plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
@@ -748,6 +788,8 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .manage(Arc::new(Mutex::new(ConnectionHandler::default())))
         .manage(Arc::new(Mutex::new(SendingFile::default())))
+        .manage(Arc::new(Mutex::new(VoiceStreamState::default())))
+        .manage(Arc::new(Mutex::new(VoiceHandler::default())))
         .invoke_handler(tauri::generate_handler![
             connect,
             disconnect,

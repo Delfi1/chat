@@ -11,6 +11,9 @@ import AuthPage from './AuthPage.vue';
 import MainPage from './MainPage.vue';
 import { UserPayload, MessagePayload } from './api.ts';
 
+//setup
+document.querySelector("html")!.classList.toggle("darkmode");
+
 const appWindow = Window.getCurrent();
 const loginned = ref(false);
 const connected = ref(false);
@@ -102,10 +105,6 @@ function connect_state() {
   messages.value = [];
 }
 
-function setup() {
-  document.querySelector("html")!.classList.toggle("darkmode");
-}
-
 onBeforeMount(() => {
   listen('on_connect', (_ev) => {
     main_state();
@@ -129,7 +128,6 @@ onBeforeMount(() => {
   listen('user_inserted', () => {
     update_lists();
   });
-
 
   listen('user_updated', () => {
     update_lists();
@@ -161,7 +159,6 @@ onBeforeMount(() => {
     update_lists();
   });
 
-  setup();
   // load address and if exists - connect 
   load_connect();
   // Set current state as connect
@@ -193,6 +190,7 @@ onBeforeMount(() => {
   margin: 0;
   box-sizing: border-box; 
 }
+
 * {
   font-family: Archivo;
   color: #fff;

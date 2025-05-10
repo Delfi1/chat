@@ -185,7 +185,6 @@ pub fn logout(ctx: &ReducerContext) -> Result<(), String> {
 }
 
 #[reducer]
-// todo: files limit
 pub fn send_message(ctx: &ReducerContext, text: String, reply: Option<u32>) -> Result<(), String> {
     let text = text.trim().to_string();
     let Some(creds) = get_creds(ctx) else {
@@ -317,4 +316,44 @@ pub fn client_disconnected(ctx: &ReducerContext) {
         ctx.db.request().sender().delete(ctx.sender);
         ctx.db.temp_file().id().delete(request.file);
     }
+}
+
+#[table(name=voice_packet, public)]
+pub struct VoicePacket {
+    room_id: u32,
+    sender: u32,
+    data: Vec<f32>,
+}
+
+fn get_room(ctx: &ReducerContext, creds: &UserCredentials) -> Option<VoiceRoom> {
+    ctx.db.room().iter()
+        .find(|r| r.users.contains(&creds.user_id))
+}
+
+#[table(name=room, public)]
+pub struct VoiceRoom {
+    #[primary_key]
+    #[auto_inc]
+    pub id: u32,
+    // Users by id
+    pub users: Vec<u32>
+}
+
+#[reducer]
+pub fn send_voice_packet(ctx: &ReducerContext, data: Vec<f32>) -> Result<(), String> {
+    let Some(creds) = get_creds(ctx) else {
+        return Err("You are not logged in".to_string());
+    };
+
+    let Some(room) = get_room(ctx, &creds) else {
+        return Err("User not in a voice room".to_string());
+    };
+
+    ctx.db.voice_packet().insert(VoicePacket { 
+        room_id: room.id,
+        sender: creds.user_id,
+        data
+    });
+
+    Ok(())
 }

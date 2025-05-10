@@ -135,7 +135,9 @@
 
 <template>
   <div v-if="!is_owner()" class="message-container received" @contextmenu="onReceivedClick">
-    <div class="avatar"></div>
+    <div class="avatar-container">
+      <div class="avatar"></div>
+    </div>
     <div class="message">
       <div v-if="props.reply" class="reply">Replying to: {{ get_reply() }}</div>
       <p class="name" v-text="props.user?.name"></p>
@@ -154,16 +156,17 @@
       <File v-if="payload.file" @open_menu="file_menu" :downloading="downloading" @download="download" @open="open" @reveal="reveal" :payload="payload.file"></File>
       <div class="time" v-text="time()"></div>
     </div>
-    <div class="avatar"></div>
+    <div class="avatar-container">
+      <div class="avatar"></div>
+    </div>
 </div>
 </template>
 
 <style>
 .message-container {
-  clear: both;
   width: 100%;
-  height: fit-content;
-  position: relative;
+  display: flex;
+  flex-direction: row;
   z-index: 1;
 }
 
@@ -176,21 +179,51 @@
   line-height: 18px;
   min-width: 80px;
   font-size: 15px;
-  max-width: 60%;
-  float: left;
+  max-width: 70%;
+  height: 100%;
+  z-index: 1;
 }
 
-.message-container .name {
+.message-container .name, .message-container .time {
   user-select: none;
 }
 
-.message-container .time {
-  user-select: none;
+.avatar-container {
+  position: relative;
+  width: 57px;
+  height: auto; 
+  padding: 0;
+  z-index: 1;
 }
 
-.message-container:last-child {
-  display: block;
-  padding-bottom: anchor-size(height);
+.avatar {
+  position: absolute;
+  background-color: #6b8afd;
+  border-radius: 16px;
+  width: 55px;
+  height: 55px;
+  padding: 1px;
+  z-index: 1;
+}
+
+.message-container.sent {
+  justify-content: flex-end;
+}
+
+.message-container.received .avatar-container {
+  margin-left: 20px;
+}
+
+.message-container.sent .avatar-container {
+  margin-right: 20px;
+}
+
+.message-container.sent .avatar {
+  bottom: 0px;
+}
+
+.message-container:first-child {
+  margin-top: 10px;
 }
 
 .reply {
@@ -227,6 +260,7 @@
   margin-left: 16px;
   border-radius: 0px 5px 5px 5px;
   background-color: #2e343d;
+  float: left;
 }
 
 .received .message:after {

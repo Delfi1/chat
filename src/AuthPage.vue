@@ -71,7 +71,7 @@ function signup() {
 }
 
 .wrapper form *{
-  font-family: 'Poppins',sans-serif;
+  font-family: 'Poppins', sans-serif;
   letter-spacing: 0.5px;
   outline: none;
   border: none;

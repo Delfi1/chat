@@ -72,6 +72,8 @@
     menu.value.show(event);
   }
 
+  // todo messages view
+
   onBeforeMount(() => {
     listen<SendPayload>('send_status', (event) => {
       sending.value = true;
