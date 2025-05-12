@@ -11,8 +11,9 @@ import AuthPage from './AuthPage.vue';
 import MainPage from './MainPage.vue';
 import { UserPayload, MessagePayload } from './api.ts';
 
-//setup
+// Setup document
 document.querySelector("html")!.classList.toggle("darkmode");
+document.oncontextmenu = (event) => { event.preventDefault() };
 
 const appWindow = Window.getCurrent();
 const loginned = ref(false);
@@ -45,7 +46,6 @@ function signup(name: string, password: string) {
 
 function logout() {
   invoke('logout');
-  console.log("Logout");
   loginned.value = false;
   self.value = undefined;
 }

@@ -134,11 +134,11 @@
 </script>
 
 <template>
-  <div v-if="!is_owner()" class="message-container received" @contextmenu="onReceivedClick">
+  <div v-if="!is_owner()" class="message-container received">
     <div class="avatar-container">
-      <div class="avatar"></div>
+      <img class="avatar" width="55" height="55">
     </div>
-    <div class="message">
+    <div class="message" @contextmenu="onReceivedClick">
       <div v-if="props.reply" class="reply">Replying to: {{ get_reply() }}</div>
       <p class="name" v-text="props.user?.name"></p>
       <div @click="on_click" v-html="marked(props.payload.text)" class="text"></div>
@@ -147,8 +147,8 @@
     </div>
   </div>
   
-  <div v-if="is_owner()" class="message-container sent" @contextmenu="onSentClick">
-    <div class="message">
+  <div v-if="is_owner()" class="message-container sent">
+    <div class="message" @contextmenu="onSentClick">
       <div v-if="props.reply" class="reply">Replying to: {{ get_reply() }}</div>
       <p class="name" v-text="props.user?.name"></p>
       <div v-if="!editing" @click="on_click" v-html="marked(props.payload.text)" class="text"></div>
@@ -157,7 +157,7 @@
       <div class="time" v-text="time()"></div>
     </div>
     <div class="avatar-container">
-      <div class="avatar"></div>
+      <img class="avatar" width="55" height="55">
     </div>
 </div>
 </template>
@@ -168,6 +168,8 @@
   display: flex;
   flex-direction: row;
   z-index: 1;
+  line-height: 18px;
+  font-size: 15px;
 }
 
 .message-container .message {
@@ -176,9 +178,7 @@
   overflow-wrap: anywhere;
   padding: 8px;
   margin: 8px 8px;
-  line-height: 18px;
   min-width: 80px;
-  font-size: 15px;
   max-width: 70%;
   height: 100%;
   z-index: 1;
@@ -198,7 +198,6 @@
 
 .avatar {
   position: absolute;
-  background-color: #6b8afd;
   border-radius: 16px;
   width: 55px;
   height: 55px;
@@ -211,11 +210,11 @@
 }
 
 .message-container.received .avatar-container {
-  margin-left: 20px;
+  margin-left: 15px;
 }
 
 .message-container.sent .avatar-container {
-  margin-right: 20px;
+  margin-right: 15px;
 }
 
 .message-container.sent .avatar {
@@ -224,6 +223,10 @@
 
 .message-container:first-child {
   margin-top: 10px;
+}
+
+.message-container:last-child {
+  margin-bottom: 10px;
 }
 
 .reply {
@@ -298,8 +301,8 @@
 }
 
 .message .editor {
-  width: 100%;
   padding: 5px;
+  width: 100px;
   height: 50px;
   resize: none;
   background-color: #7794ff;

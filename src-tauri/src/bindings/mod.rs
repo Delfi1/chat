@@ -88,7 +88,7 @@ pub enum Reducer {
     RemoveMessage { id: u32 },
     RequestStream { name: String, size: u64 },
     SendMessage { text: String, reply: Option<u32> },
-    SendPacket { pocket: Vec<u8>, end: bool },
+    SendPacket { pocket: Vec<u8> },
     SendVoicePacket { data: Vec<f32> },
     Signup { name: String, password: String },
 }

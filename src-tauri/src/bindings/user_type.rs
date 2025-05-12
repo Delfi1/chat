@@ -9,6 +9,7 @@ use spacetimedb_sdk::__codegen::{self as __sdk, __lib, __sats, __ws};
 pub struct User {
     pub id: u32,
     pub is_admin: bool,
+    pub avatar: Vec<u8>,
     pub name: String,
     pub online: Vec<__sdk::Identity>,
 }

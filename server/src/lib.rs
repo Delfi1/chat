@@ -21,6 +21,7 @@ pub struct User {
     #[auto_inc]
     id: u32,
     is_admin: bool,
+    avatar: Vec<u8>,
     #[unique]
     name: String,
     online: Vec<Identity>,
@@ -99,7 +100,7 @@ pub fn request_stream(ctx: &ReducerContext, name: String, size: u64) -> Result<(
 
 // Send data pocket
 #[reducer]
-pub fn send_packet(ctx: &ReducerContext, mut pocket: Vec<u8>, end: bool) -> Result<(), String> {
+pub fn send_packet(ctx: &ReducerContext, mut pocket: Vec<u8>) -> Result<(), String> {
     if get_creds(ctx).is_none() {
         return Err("Not loginned in".to_string());
     };
@@ -117,7 +118,7 @@ pub fn send_packet(ctx: &ReducerContext, mut pocket: Vec<u8>, end: bool) -> Resu
     file.data.append(&mut pocket);
 
     // Update request and temp file
-    if end {
+    if file.data.len() as u64 == file.size {
         request.finished = true;
         ctx.db.request().sender().update(request);
     }
@@ -143,7 +144,7 @@ pub fn signup(ctx: &ReducerContext, name: String, password: String) -> Result<()
         return Err("User with this name is already exists".to_string());
     };
 
-    let user = ctx.db.user().insert(User { id: 0, name, online: vec![ctx.sender], is_admin: false });
+    let user = ctx.db.user().insert(User { id: 0, name, avatar: vec![], online: vec![ctx.sender], is_admin: false });
     ctx.db.credentials().insert( UserCredentials { user_id: user.id, password, connections: vec![ctx.sender] });
 
     Ok(())

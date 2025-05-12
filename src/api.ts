@@ -1,6 +1,7 @@
 interface UserPayload {
   id: number,
   name: string,
+  avatar: Uint8Array,
   id_admin: boolean,
   online: boolean
 }

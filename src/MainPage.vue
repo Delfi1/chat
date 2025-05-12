@@ -12,7 +12,7 @@
   import { MenuItem } from "primevue/menuitem";
 
   const props = defineProps<{
-    self: UserPayload | undefined
+    self: UserPayload | undefined,
     users: UserPayload[],
     messages: MessagePayload[]
   }>();
@@ -72,8 +72,6 @@
     menu.value.show(event);
   }
 
-  // todo messages view
-
   onBeforeMount(() => {
     listen<SendPayload>('send_status', (event) => {
       sending.value = true;
@@ -94,6 +92,7 @@
 
 <template>
   <div class="container">
+    <ContextMenu ref="menu" :model="menu_items"/>
     <div class="left-menu">
       <div class="logo">
         <h1>De</h1>
@@ -120,7 +119,6 @@
     </div>
     
     <div class="central-box">
-      <ContextMenu ref="menu" :model="menu_items"/>
       <div v-if="page == Pages.chat" class="chat-page">
         <div class="chat-box">
           <div class="messages-box" id="messages-area">
@@ -148,7 +146,9 @@
       </div>
 
       <div v-if="page == Pages.account" class="account-page">
-        <button @click="emit('logout')">Logout</button>
+        <div class="account-settings">
+
+        </div>
       </div>
 
       <div v-if="page == Pages.settings" class="settings-page">
@@ -376,11 +376,21 @@
   right: 0;
 }
 
-.account-page button {
-  width: 60px;
-  height: 25px;
-  margin: 10px;
+.account-page {
   background-color: #202329;
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+.account-page .account-settings {
+  position: absolute;
+  width: 90%;
+  height: 90%;
+  margin: 30px;
+  padding: 10px;
+  line-height: 30px;
+  outline: thick double #2aaee2;
 }
 
 </style>

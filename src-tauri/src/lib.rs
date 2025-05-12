@@ -107,6 +107,7 @@ impl MessagePayload {
 pub struct UserPayload {
     pub id: u32,
     pub name: String,
+    pub avatar: Vec<u8>,
     pub is_admin: bool,
     pub online: bool,
 }
@@ -116,6 +117,7 @@ impl UserPayload {
         Self {
             id: user.id,
             name: user.name,
+            avatar: user.avatar,
             is_admin: user.is_admin,
             online: !user.online.is_empty(),
         }
@@ -180,7 +182,7 @@ impl SendFile {
 
         connection
             .reducers
-            .send_packet(packet, self.data.is_empty())
+            .send_packet(packet)
             .expect("Spacetimedb error");
 
         return self.data.len();
@@ -489,7 +491,7 @@ fn register_callbacks(ctx: &DbConnection, session: SessionState, sending: Sendin
     let inner = session.clone();
     let sending_inner = sending.clone();
     ctx.reducers
-        .on_send_packet(move |ctx, _data: &Vec<u8>, _end| match &ctx.event.status {
+        .on_send_packet(move |ctx, _data: &Vec<u8>| match &ctx.event.status {
             Status::Committed => {
                 let Some(file) = &mut sending_inner.lock().unwrap().file else {
                     return;
