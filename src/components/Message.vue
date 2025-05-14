@@ -1,6 +1,6 @@
 <script setup lang="ts">
   import { ref } from "vue";
-  import { FileRefPayload, MessagePayload, UserPayload } from '../api';
+  import { FileRefPayload, MessagePayload, UserPayload, avatarName } from '../api';
   import { marked } from 'marked';
   import File from './File.vue';
 
@@ -12,7 +12,7 @@
   import { listen } from "@tauri-apps/api/event";
 
   const props = defineProps<{
-    self: UserPayload | undefined,
+    self: UserPayload,
     user: UserPayload | undefined,
     reply: MessagePayload | undefined,
     payload: MessagePayload
@@ -85,6 +85,7 @@
   function file_menu(event: MouseEvent, items: MenuItem[]) {
     emit("open_menu", event, items);
   }
+  const profileName = avatarName(props.user!);
 
   // time formatter
   function time(): string {
@@ -136,7 +137,8 @@
 <template>
   <div v-if="!is_owner()" class="message-container received">
     <div class="avatar-container">
-      <img class="avatar" width="55" height="55">
+      <img v-if="user?.avatar" class="avatar" width="55" height="55" :src="user?.avatar">
+      <h2 v-if="!user?.avatar" class="avatar text" v-text="profileName"></h2>
     </div>
     <div class="message" @contextmenu="onReceivedClick">
       <div v-if="props.reply" class="reply">Replying to: {{ get_reply() }}</div>
@@ -157,7 +159,8 @@
       <div class="time" v-text="time()"></div>
     </div>
     <div class="avatar-container">
-      <img class="avatar" width="55" height="55">
+      <img v-if="user?.avatar" class="avatar" width="55" height="55" :src="user?.avatar">
+      <h2 v-if="!user?.avatar" class="avatar text" v-text="profileName"></h2>
     </div>
 </div>
 </template>
@@ -198,11 +201,19 @@
 
 .avatar {
   position: absolute;
-  border-radius: 16px;
+  outline: none;
+  border: none;
+  border-radius: 18px;
+  font-size: 22px;
   width: 55px;
   height: 55px;
-  padding: 1px;
   z-index: 1;
+}
+
+.avatar.text {
+  text-align: center;
+  align-content: center;
+  background-color: black;
 }
 
 .message-container.sent {

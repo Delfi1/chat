@@ -1,7 +1,8 @@
 interface UserPayload {
   id: number,
   name: string,
-  avatar: Uint8Array,
+  // base64 string
+  avatar: string | null,
   id_admin: boolean,
   online: boolean
 }
@@ -28,14 +29,22 @@ interface SendPayload {
 }
 
 // Message sender
-function sender(users: UserPayload[], message: MessagePayload): UserPayload | undefined {
-  return users.find((user) => user.id == message.sender);
+function sender(users: Map<number, UserPayload>, message: MessagePayload): UserPayload | undefined {
+  return users.get(message.sender);
 }
 
-function get_messsage(messages: MessagePayload[], id: number | null): MessagePayload | undefined {
+function messagesChunk(messages: Map<number, MessagePayload>): MessagePayload[] {
+  return [...messages.values()].sort((a, b) => a.sent - b.sent);
+}
+
+function getMesssage(messages: Map<number, MessagePayload>, id: number | null): MessagePayload | undefined {
   if (!id) { return undefined };
-  return messages.find((message) => message.id == id);
+  return messages.get(id);
 }
 
-export { sender, get_messsage }
+function avatarName(user: UserPayload): string {
+  return user.name.substring(0, 2)
+}
+
+export { sender, getMesssage, messagesChunk, avatarName }
 export type { UserPayload, MessagePayload, FileRefPayload, SendPayload }

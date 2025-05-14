@@ -23,6 +23,7 @@ pub mod room_table;
 pub mod send_message_reducer;
 pub mod send_packet_reducer;
 pub mod send_voice_packet_reducer;
+pub mod set_avatar_reducer;
 pub mod signup_reducer;
 pub mod temp_file_table;
 pub mod temp_file_type;
@@ -62,6 +63,7 @@ pub use send_packet_reducer::{send_packet, set_flags_for_send_packet, SendPacket
 pub use send_voice_packet_reducer::{
     send_voice_packet, set_flags_for_send_voice_packet, SendVoicePacketCallbackId,
 };
+pub use set_avatar_reducer::{set_avatar, set_flags_for_set_avatar, SetAvatarCallbackId};
 pub use signup_reducer::{set_flags_for_signup, signup, SignupCallbackId};
 pub use temp_file_table::*;
 pub use temp_file_type::TempFile;
@@ -90,6 +92,7 @@ pub enum Reducer {
     SendMessage { text: String, reply: Option<u32> },
     SendPacket { pocket: Vec<u8> },
     SendVoicePacket { data: Vec<f32> },
+    SetAvatar { data: Vec<u8> },
     Signup { name: String, password: String },
 }
 
@@ -110,6 +113,7 @@ impl __sdk::Reducer for Reducer {
             Reducer::SendMessage { .. } => "send_message",
             Reducer::SendPacket { .. } => "send_packet",
             Reducer::SendVoicePacket { .. } => "send_voice_packet",
+            Reducer::SetAvatar { .. } => "set_avatar",
             Reducer::Signup { .. } => "signup",
         }
     }
@@ -169,6 +173,13 @@ impl TryFrom<__ws::ReducerCallInfo<__ws::BsatnFormat>> for Reducer {
                 send_voice_packet_reducer::SendVoicePacketArgs,
             >("send_voice_packet", &value.args)?
             .into()),
+            "set_avatar" => Ok(
+                __sdk::parse_reducer_args::<set_avatar_reducer::SetAvatarArgs>(
+                    "set_avatar",
+                    &value.args,
+                )?
+                .into(),
+            ),
             "signup" => Ok(__sdk::parse_reducer_args::<signup_reducer::SignupArgs>(
                 "signup",
                 &value.args,

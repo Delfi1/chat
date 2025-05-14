@@ -24,6 +24,7 @@ tauri-build = { version = "2", features = [] }
 
 [dependencies]
 spacetimedb-sdk = "1.*"
+photon-rs = "0.3.2"
 cpal = "0.15.*"
 tauri = { version = "2", features = [] }
 tauri-plugin-opener = "2"

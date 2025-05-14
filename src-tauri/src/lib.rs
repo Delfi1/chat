@@ -107,17 +107,21 @@ impl MessagePayload {
 pub struct UserPayload {
     pub id: u32,
     pub name: String,
-    pub avatar: Vec<u8>,
+    pub avatar: Option<String>,
     pub is_admin: bool,
     pub online: bool,
 }
 
 impl UserPayload {
     pub fn new(user: User) -> Self {
+        let avatar = user.avatar
+            .and_then(|data| photon_rs::native::open_image_from_bytes(&data).ok())
+            .and_then(|image| Some(image.get_base64()));
+
         Self {
             id: user.id,
             name: user.name,
-            avatar: user.avatar,
+            avatar,
             is_admin: user.is_admin,
             online: !user.online.is_empty(),
         }
@@ -313,11 +317,11 @@ impl SessionInner {
                 .expect("Emit error");
         }
 
-        self.app.emit("user_inserted", ()).expect("Emit error");
+        self.app.emit("user_inserted", UserPayload::new(user.clone())).expect("Emit error");
     }
 
-    pub fn on_user_removed(&mut self, _user: &User) {
-        self.app.emit("user_removed", ()).expect("Emit error");
+    pub fn on_user_removed(&mut self, user: &User) {
+        self.app.emit("user_removed", UserPayload::new(user.clone())).expect("Emit error");
     }
 
     pub fn on_user_updated(&mut self, _old: &User, new: &User) {
@@ -328,7 +332,7 @@ impl SessionInner {
                 .expect("Emit error");
         }
 
-        self.app.emit("user_updated", ()).expect("Emit error");
+        self.app.emit("user_updated", UserPayload::new(new.clone())).expect("Emit error");
     }
 
     pub fn on_message_insert(&mut self, message: &Message) {
@@ -337,12 +341,12 @@ impl SessionInner {
             .expect("Emit error");
     }
 
-    pub fn on_message_removed(&mut self, _message: &Message) {
-        self.app.emit("message_removed", ()).expect("Emit error");
+    pub fn on_message_removed(&mut self, message: &Message) {
+        self.app.emit("message_removed", MessagePayload::new(message.clone())).expect("Emit error");
     }
 
-    pub fn on_message_updated(&mut self) {
-        self.app.emit("message_updated", ()).expect("Emit error");
+    pub fn on_message_updated(&mut self, new: &Message) {
+        self.app.emit("message_updated", MessagePayload::new(new.clone())).expect("Emit error");
     }
 
     /// Load file on inserted
@@ -435,8 +439,8 @@ fn register_callbacks(ctx: &DbConnection, session: SessionState, sending: Sendin
     });
 
     let inner = session.clone();
-    ctx.db.message().on_update(move |_ctx, _old, _new| {
-        inner.lock().unwrap().on_message_updated();
+    ctx.db.message().on_update(move |_ctx, _old, new| {
+        inner.lock().unwrap().on_message_updated(new);
     });
 
     let inner = session.clone();
@@ -761,6 +765,21 @@ fn download_file(payload: FileRefPayload, session: State<SessionState>) -> Optio
     session.lock().unwrap().download_file(payload, inner)
 }
 
+#[tauri::command]
+fn set_avatar(path: PathBuf, session: State<SessionState>) {
+        let Some(connection) = &session.lock().unwrap().connection else {
+        return;
+    };
+
+    println!("Avatar: {:?}", path);
+    if let Ok(data) = std::fs::read(path) {
+        connection
+            .reducers
+            .set_avatar(data)
+            .expect("Spacetime error");
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let mut builder = tauri::Builder::default()
@@ -805,7 +824,8 @@ pub fn run() {
             get_messages,
             get_users,
             file_path,
-            download_file
+            download_file,
+            set_avatar
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application");

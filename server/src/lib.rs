@@ -21,7 +21,7 @@ pub struct User {
     #[auto_inc]
     id: u32,
     is_admin: bool,
-    avatar: Vec<u8>,
+    avatar: Option<Vec<u8>>,
     #[unique]
     name: String,
     online: Vec<Identity>,
@@ -144,7 +144,7 @@ pub fn signup(ctx: &ReducerContext, name: String, password: String) -> Result<()
         return Err("User with this name is already exists".to_string());
     };
 
-    let user = ctx.db.user().insert(User { id: 0, name, avatar: vec![], online: vec![ctx.sender], is_admin: false });
+    let user = ctx.db.user().insert(User { id: 0, name, avatar: None, online: vec![ctx.sender], is_admin: false });
     ctx.db.credentials().insert( UserCredentials { user_id: user.id, password, connections: vec![ctx.sender] });
 
     Ok(())
@@ -355,6 +355,29 @@ pub fn send_voice_packet(ctx: &ReducerContext, data: Vec<f32>) -> Result<(), Str
         sender: creds.user_id,
         data
     });
+
+    Ok(())
+}
+
+#[reducer]
+pub fn set_avatar(ctx: &ReducerContext, data: Vec<u8>) -> Result<(), String> {
+    let Some(creds) = get_creds(ctx) else {
+        return Err("You are not logged in".to_string());
+    };
+
+    let image = match image::load_from_memory(&data) {
+        Ok(image) => image,
+        Err(e) => return Err(format!("Image error: {}", e))
+    };
+
+    if image.width() != image.height() {
+        return Err(format!("Image size error w{} not equals h{}", image.width(), image.height()));
+    }
+
+    // Update user avatar
+    let mut user = ctx.db.user().id().find(creds.user_id).unwrap();
+    user.avatar = Some(data);
+    ctx.db.user().id().update(user);
 
     Ok(())
 }

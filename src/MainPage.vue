@@ -1,6 +1,6 @@
 <script setup lang="ts">
   import { onBeforeMount, ref } from 'vue';
-  import { UserPayload, MessagePayload, sender, get_messsage, SendPayload } from './api';
+  import { UserPayload, MessagePayload, sender, getMesssage, messagesChunk, SendPayload } from './api';
   import Message from './components/Message.vue';
   //import User from './components/User.vue';
   import { invoke } from '@tauri-apps/api/core';
@@ -12,9 +12,9 @@
   import { MenuItem } from "primevue/menuitem";
 
   const props = defineProps<{
-    self: UserPayload | undefined,
-    users: UserPayload[],
-    messages: MessagePayload[]
+    self: UserPayload,
+    users: Map<number, UserPayload>,
+    messages: Map<number, MessagePayload>
   }>();
   const emit = defineEmits(['logout']);
 
@@ -31,9 +31,13 @@
 
   function attach() {
     open().then((path) => {
-      if (path) {
-        attached.value = path;
-      }
+      if (path) { attached.value = path };
+    })
+  }
+
+  function open_avatar() {
+    open().then((path) => {
+      if (path) { invoke("set_avatar", { "path": path }) };
     })
   }
 
@@ -122,7 +126,7 @@
       <div v-if="page == Pages.chat" class="chat-page">
         <div class="chat-box">
           <div class="messages-box" id="messages-area">
-            <Message v-for="message in props.messages" :self="self" :user="sender(props.users, message)" :payload="message" :reply="get_messsage(props.messages, message.reply)" @open_menu="open_menu" @reply="reply" @edit="edit" @remove="remove"></Message>
+            <Message v-for="message in messagesChunk(props.messages)" :self="self" :user="sender(props.users, message)" :payload="message" :reply="getMesssage(props.messages, message.reply)" @open_menu="open_menu" @reply="reply" @edit="edit" @remove="remove"></Message>
           </div>
           <div id="input-box" class="input-box">
             <div class="send-data-box">
@@ -147,7 +151,8 @@
 
       <div v-if="page == Pages.account" class="account-page">
         <div class="account-settings">
-
+          <button @click="open_avatar">Set avatar</button>
+          <button @click="emit('logout')">Logout</button>
         </div>
       </div>
 

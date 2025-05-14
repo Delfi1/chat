@@ -16,24 +16,22 @@ document.querySelector("html")!.classList.toggle("darkmode");
 document.oncontextmenu = (event) => { event.preventDefault() };
 
 const appWindow = Window.getCurrent();
-const loginned = ref(false);
 const connected = ref(false);
 const connecting = ref(false);
 const loginErrorMsg = ref('')
 const connectErrorMsg = ref('');
 
 const self = ref<UserPayload>();
-const users = ref([] as UserPayload[]);
+const users = ref<Map<number, UserPayload>>(new Map());
 
-const messages_len = ref(0);
-const messages = ref([] as MessagePayload[]);
+const messages = ref<Map<number, MessagePayload>>(new Map());
 const store = new LazyStore('user.json');
 
 function connect(addr: string) {
   invoke('connect', {"addr": addr});
   store.set('addr', addr);
   connecting.value = true;
-  console.log("connect");
+  console.log("connecting...");
 }
 
 function login(name: string, password: string) {
@@ -46,7 +44,6 @@ function signup(name: string, password: string) {
 
 function logout() {
   invoke('logout');
-  loginned.value = false;
   self.value = undefined;
 }
 
@@ -55,22 +52,6 @@ function scroll_area() {
   if (area.scrollTo) {
     area.scrollTo(0, area.scrollHeight);
   }
-}
-
-function update_lists() {
-  invoke<UserPayload[]>('get_users').then((result) => {
-    users.value = result;
-  });
-
-  invoke<MessagePayload[]>('get_messages', {"start": 0, "end": 10000}).then((result) => {
-    messages.value = result;
-    scroll_area();
-  });
-
-  invoke<number>('messages_len').then((result) => {
-    messages_len.value = result;
-    scroll_area();
-  });
 }
 
 function main_state() {
@@ -99,10 +80,9 @@ function connect_state() {
   appWindow.setSize(new LogicalSize(400, 600));
 
   connected.value = false;
-  loginned.value = false;
   self.value = undefined;
-  users.value = [];
-  messages.value = [];
+  users.value = new Map();
+  messages.value = new Map();
 }
 
 onBeforeMount(() => {
@@ -125,38 +105,55 @@ onBeforeMount(() => {
   });
 
   // Users
-  listen('user_inserted', () => {
-    update_lists();
+  listen<UserPayload>('user_inserted', (ev) => {
+    if (ev.payload) {
+      users.value.set(ev.payload.id, ev.payload);
+    }
   });
 
-  listen('user_updated', () => {
-    update_lists();
+  listen<UserPayload>('user_updated', (ev) => {
+    if (ev.payload) {
+      users.value.set(ev.payload.id, ev.payload);
+    }
   });
 
   // Messages
-  listen('message_inserted', () => {
-    update_lists();
+  listen<MessagePayload>('message_inserted', (ev) => {
+    if (ev.payload) {
+      messages.value.set(ev.payload.id, ev.payload);
+    }
+    
+    scroll_area();
   });
 
-  listen('message_updated', () => {
-    update_lists();
+  listen<MessagePayload>('message_updated', (ev) => {
+    if (ev.payload) {
+      messages.value.set(ev.payload.id, ev.payload);
+    }
+
+    scroll_area();
   });
 
   // Loginned User is inserted
   listen<UserPayload>('loginned', (ev) => {
-    loginned.value = true;
     self.value = ev.payload;
     loginErrorMsg.value = '';
-
-    update_lists();
   });
 
-  listen('user_removed', (_ev) => {
-    update_lists();
+  listen<UserPayload>('user_removed', (ev) => {
+    console.log(ev.payload);
+
+    if (ev.payload) {
+      users.value.delete(ev.payload.id);
+    }
   });
 
-  listen('message_removed', (_ev) => {
-    update_lists();
+  listen<MessagePayload>('message_removed', (ev) => {
+    console.log(ev.payload);
+
+    if (ev.payload) {
+      messages.value.delete(ev.payload.id);
+    }
   });
 
   // load address and if exists - connect 
@@ -169,8 +166,8 @@ onBeforeMount(() => {
 <template>
 <div class="main">
   <ConnectPage :connecting="connecting" :connected="connected" :errorMsg="connectErrorMsg" @on_connect="connect" v-if="!connected"></ConnectPage>
-  <AuthPage v-if="connected && !loginned" :error-msg="loginErrorMsg" @onLogin="login" @onSignup="signup"></AuthPage>
-  <MainPage v-if="connected && loginned" @logout="logout" :self="self" :messages="messages" :users="users"></MainPage>
+  <AuthPage v-if="connected && !self" :error-msg="loginErrorMsg" @onLogin="login" @onSignup="signup"></AuthPage>
+  <MainPage v-if="connected && self" @logout="logout" :self="self" :messages="messages" :users="users"></MainPage>
 </div>
 </template>
 
