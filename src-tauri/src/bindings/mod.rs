@@ -19,14 +19,20 @@ pub mod message_type;
 pub mod remove_message_reducer;
 pub mod request_stream_reducer;
 pub mod request_table;
+pub mod room_table;
 pub mod send_message_reducer;
 pub mod send_packet_reducer;
+pub mod send_voice_packet_reducer;
+pub mod set_avatar_reducer;
 pub mod signup_reducer;
 pub mod temp_file_table;
 pub mod temp_file_type;
 pub mod user_credentials_type;
 pub mod user_table;
 pub mod user_type;
+pub mod voice_packet_table;
+pub mod voice_packet_type;
+pub mod voice_room_type;
 
 pub use client_connected_reducer::{
     client_connected, set_flags_for_client_connected, ClientConnectedCallbackId,
@@ -51,14 +57,22 @@ pub use request_stream_reducer::{
     request_stream, set_flags_for_request_stream, RequestStreamCallbackId,
 };
 pub use request_table::*;
+pub use room_table::*;
 pub use send_message_reducer::{send_message, set_flags_for_send_message, SendMessageCallbackId};
 pub use send_packet_reducer::{send_packet, set_flags_for_send_packet, SendPacketCallbackId};
+pub use send_voice_packet_reducer::{
+    send_voice_packet, set_flags_for_send_voice_packet, SendVoicePacketCallbackId,
+};
+pub use set_avatar_reducer::{set_avatar, set_flags_for_set_avatar, SetAvatarCallbackId};
 pub use signup_reducer::{set_flags_for_signup, signup, SignupCallbackId};
 pub use temp_file_table::*;
 pub use temp_file_type::TempFile;
 pub use user_credentials_type::UserCredentials;
 pub use user_table::*;
 pub use user_type::User;
+pub use voice_packet_table::*;
+pub use voice_packet_type::VoicePacket;
+pub use voice_room_type::VoiceRoom;
 
 #[derive(Clone, PartialEq, Debug)]
 
@@ -76,7 +90,9 @@ pub enum Reducer {
     RemoveMessage { id: u32 },
     RequestStream { name: String, size: u64 },
     SendMessage { text: String, reply: Option<u32> },
-    SendPacket { pocket: Vec<u8>, end: bool },
+    SendPacket { pocket: Vec<u8> },
+    SendVoicePacket { data: Vec<f32> },
+    SetAvatar { data: Vec<u8> },
     Signup { name: String, password: String },
 }
 
@@ -96,6 +112,8 @@ impl __sdk::Reducer for Reducer {
             Reducer::RequestStream { .. } => "request_stream",
             Reducer::SendMessage { .. } => "send_message",
             Reducer::SendPacket { .. } => "send_packet",
+            Reducer::SendVoicePacket { .. } => "send_voice_packet",
+            Reducer::SetAvatar { .. } => "set_avatar",
             Reducer::Signup { .. } => "signup",
         }
     }
@@ -151,6 +169,17 @@ impl TryFrom<__ws::ReducerCallInfo<__ws::BsatnFormat>> for Reducer {
                 )?
                 .into(),
             ),
+            "send_voice_packet" => Ok(__sdk::parse_reducer_args::<
+                send_voice_packet_reducer::SendVoicePacketArgs,
+            >("send_voice_packet", &value.args)?
+            .into()),
+            "set_avatar" => Ok(
+                __sdk::parse_reducer_args::<set_avatar_reducer::SetAvatarArgs>(
+                    "set_avatar",
+                    &value.args,
+                )?
+                .into(),
+            ),
             "signup" => Ok(__sdk::parse_reducer_args::<signup_reducer::SignupArgs>(
                 "signup",
                 &value.args,
@@ -174,8 +203,10 @@ pub struct DbUpdate {
     file: __sdk::TableUpdate<File>,
     message: __sdk::TableUpdate<Message>,
     request: __sdk::TableUpdate<FileRequest>,
+    room: __sdk::TableUpdate<VoiceRoom>,
     temp_file: __sdk::TableUpdate<TempFile>,
     user: __sdk::TableUpdate<User>,
+    voice_packet: __sdk::TableUpdate<VoicePacket>,
 }
 
 impl TryFrom<__ws::DatabaseUpdate<__ws::BsatnFormat>> for DbUpdate {
@@ -190,10 +221,14 @@ impl TryFrom<__ws::DatabaseUpdate<__ws::BsatnFormat>> for DbUpdate {
                 "file" => db_update.file = file_table::parse_table_update(table_update)?,
                 "message" => db_update.message = message_table::parse_table_update(table_update)?,
                 "request" => db_update.request = request_table::parse_table_update(table_update)?,
+                "room" => db_update.room = room_table::parse_table_update(table_update)?,
                 "temp_file" => {
                     db_update.temp_file = temp_file_table::parse_table_update(table_update)?
                 }
                 "user" => db_update.user = user_table::parse_table_update(table_update)?,
+                "voice_packet" => {
+                    db_update.voice_packet = voice_packet_table::parse_table_update(table_update)?
+                }
 
                 unknown => {
                     return Err(__sdk::InternalError::unknown_name(
@@ -232,12 +267,17 @@ impl __sdk::DbUpdate for DbUpdate {
         diff.request = cache
             .apply_diff_to_table::<FileRequest>("request", &self.request)
             .with_updates_by_pk(|row| &row.sender);
+        diff.room = cache
+            .apply_diff_to_table::<VoiceRoom>("room", &self.room)
+            .with_updates_by_pk(|row| &row.id);
         diff.temp_file = cache
             .apply_diff_to_table::<TempFile>("temp_file", &self.temp_file)
             .with_updates_by_pk(|row| &row.id);
         diff.user = cache
             .apply_diff_to_table::<User>("user", &self.user)
             .with_updates_by_pk(|row| &row.id);
+        diff.voice_packet =
+            cache.apply_diff_to_table::<VoicePacket>("voice_packet", &self.voice_packet);
 
         diff
     }
@@ -251,8 +291,10 @@ pub struct AppliedDiff<'r> {
     file: __sdk::TableAppliedDiff<'r, File>,
     message: __sdk::TableAppliedDiff<'r, Message>,
     request: __sdk::TableAppliedDiff<'r, FileRequest>,
+    room: __sdk::TableAppliedDiff<'r, VoiceRoom>,
     temp_file: __sdk::TableAppliedDiff<'r, TempFile>,
     user: __sdk::TableAppliedDiff<'r, User>,
+    voice_packet: __sdk::TableAppliedDiff<'r, VoicePacket>,
 }
 
 impl __sdk::InModule for AppliedDiff<'_> {
@@ -273,8 +315,14 @@ impl<'r> __sdk::AppliedDiff<'r> for AppliedDiff<'r> {
         callbacks.invoke_table_row_callbacks::<File>("file", &self.file, event);
         callbacks.invoke_table_row_callbacks::<Message>("message", &self.message, event);
         callbacks.invoke_table_row_callbacks::<FileRequest>("request", &self.request, event);
+        callbacks.invoke_table_row_callbacks::<VoiceRoom>("room", &self.room, event);
         callbacks.invoke_table_row_callbacks::<TempFile>("temp_file", &self.temp_file, event);
         callbacks.invoke_table_row_callbacks::<User>("user", &self.user, event);
+        callbacks.invoke_table_row_callbacks::<VoicePacket>(
+            "voice_packet",
+            &self.voice_packet,
+            event,
+        );
     }
 }
 
@@ -854,7 +902,9 @@ impl __sdk::SpacetimeModule for RemoteModule {
         file_table::register_table(client_cache);
         message_table::register_table(client_cache);
         request_table::register_table(client_cache);
+        room_table::register_table(client_cache);
         temp_file_table::register_table(client_cache);
         user_table::register_table(client_cache);
+        voice_packet_table::register_table(client_cache);
     }
 }

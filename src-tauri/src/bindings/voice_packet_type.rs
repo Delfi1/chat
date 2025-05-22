@@ -6,14 +6,12 @@ use spacetimedb_sdk::__codegen::{self as __sdk, __lib, __sats, __ws};
 
 #[derive(__lib::ser::Serialize, __lib::de::Deserialize, Clone, PartialEq, Debug)]
 #[sats(crate = __lib)]
-pub struct User {
-    pub id: u32,
-    pub is_admin: bool,
-    pub avatar: Option<Vec<u8>>,
-    pub name: String,
-    pub online: Vec<__sdk::Identity>,
+pub struct VoicePacket {
+    pub room_id: u32,
+    pub sender: u32,
+    pub data: Vec<f32>,
 }
 
-impl __sdk::InModule for User {
+impl __sdk::InModule for VoicePacket {
     type Module = super::RemoteModule;
 }

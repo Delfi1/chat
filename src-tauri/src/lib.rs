@@ -1,7 +1,9 @@
 use std::{
+    thread,
     path::PathBuf,
     sync::{Arc, Mutex},
 };
+use cpal::traits::{DeviceTrait, HostTrait};
 use tauri::{AppHandle, Emitter, Manager, RunEvent, State};
 use tauri_plugin_updater::UpdaterExt;
 
@@ -106,15 +108,21 @@ impl MessagePayload {
 pub struct UserPayload {
     pub id: u32,
     pub name: String,
+    pub avatar: Option<String>,
     pub is_admin: bool,
     pub online: bool,
 }
 
 impl UserPayload {
     pub fn new(user: User) -> Self {
+        let avatar = user.avatar
+            .and_then(|data| photon_rs::native::open_image_from_bytes(&data).ok())
+            .and_then(|image| Some(image.get_base64()));
+
         Self {
             id: user.id,
             name: user.name,
+            avatar,
             is_admin: user.is_admin,
             online: !user.online.is_empty(),
         }
@@ -179,7 +187,7 @@ impl SendFile {
 
         connection
             .reducers
-            .send_packet(packet, self.data.is_empty())
+            .send_packet(packet)
             .expect("Spacetimedb error");
 
         return self.data.len();
@@ -198,8 +206,46 @@ type SendingFileState = Arc<Mutex<SendingFile>>;
 struct ConnectionHandler(Option<std::thread::JoinHandle<()>>);
 type ConnectionState = Arc<Mutex<ConnectionHandler>>;
 
+// Cpal voice stream controller, todo
+pub struct VoiceStream {
+    host: cpal::Host,
+    input_device: cpal::Device,
+    output_device: cpal::Device,
+}
+
+impl Default for VoiceStream {
+    /// Setup voice stream data
+    fn default() -> Self {
+        println!("Initializing voice stream...");
+        let host = cpal::default_host();
+        let input_device = host.default_input_device()
+            .expect("No aviable input device");
+        let output_device = host.default_output_device()
+            .expect("No aviable input device");
+        let config = input_device
+            .default_input_config()
+            .expect("Failed to get default input config");
+
+        println!("Input device: {:?}", input_device.name().ok());
+        println!("Output device: {:?}", output_device.name().ok());
+        println!("Format: {:?}", config.sample_format());
+
+        Self {
+            host,
+            input_device,
+            output_device
+        }
+    }
+}
+
+type VoiceStreamState = Arc<Mutex<VoiceStream>>;
+
+#[derive(Default)]
+struct VoiceHandler(Option<std::thread::JoinHandle<()>>);
+type VoiceHandlerState = Arc<Mutex<VoiceHandler>>;
+
 /// Downloads file from server
-pub struct DownloadingState {
+pub struct DownloadingFile {
     file: u32,
     subscription: bindings::SubscriptionHandle,
 }
@@ -208,7 +254,7 @@ pub struct DownloadingState {
 struct SessionInner {
     /// Window events emitter
     pub app: AppHandle,
-    pub downloading: Vec<DownloadingState>,
+    pub downloading: Vec<DownloadingFile>,
     pub connection: Option<DbConnection>,
     pub identity: Option<Identity>,
 }
@@ -272,11 +318,11 @@ impl SessionInner {
                 .expect("Emit error");
         }
 
-        self.app.emit("user_inserted", ()).expect("Emit error");
+        self.app.emit("user_inserted", UserPayload::new(user.clone())).expect("Emit error");
     }
 
-    pub fn on_user_removed(&mut self, _user: &User) {
-        self.app.emit("user_removed", ()).expect("Emit error");
+    pub fn on_user_removed(&mut self, user: &User) {
+        self.app.emit("user_removed", UserPayload::new(user.clone())).expect("Emit error");
     }
 
     pub fn on_user_updated(&mut self, _old: &User, new: &User) {
@@ -287,7 +333,7 @@ impl SessionInner {
                 .expect("Emit error");
         }
 
-        self.app.emit("user_updated", ()).expect("Emit error");
+        self.app.emit("user_updated", UserPayload::new(new.clone())).expect("Emit error");
     }
 
     pub fn on_message_insert(&mut self, message: &Message) {
@@ -296,12 +342,12 @@ impl SessionInner {
             .expect("Emit error");
     }
 
-    pub fn on_message_removed(&mut self, _message: &Message) {
-        self.app.emit("message_removed", ()).expect("Emit error");
+    pub fn on_message_removed(&mut self, message: &Message) {
+        self.app.emit("message_removed", MessagePayload::new(message.clone())).expect("Emit error");
     }
 
-    pub fn on_message_updated(&mut self) {
-        self.app.emit("message_updated", ()).expect("Emit error");
+    pub fn on_message_updated(&mut self, new: &Message) {
+        self.app.emit("message_updated", MessagePayload::new(new.clone())).expect("Emit error");
     }
 
     /// Load file on inserted
@@ -354,7 +400,7 @@ impl SessionInner {
             })
             .subscribe(format!("SELECT * from file f WHERE f.id = {}", payload.id));
 
-        self.downloading.push(DownloadingState {
+        self.downloading.push(DownloadingFile {
             file: payload.id,
             subscription,
         });
@@ -394,8 +440,8 @@ fn register_callbacks(ctx: &DbConnection, session: SessionState, sending: Sendin
     });
 
     let inner = session.clone();
-    ctx.db.message().on_update(move |_ctx, _old, _new| {
-        inner.lock().unwrap().on_message_updated();
+    ctx.db.message().on_update(move |_ctx, _old, new| {
+        inner.lock().unwrap().on_message_updated(new);
     });
 
     let inner = session.clone();
@@ -450,7 +496,7 @@ fn register_callbacks(ctx: &DbConnection, session: SessionState, sending: Sendin
     let inner = session.clone();
     let sending_inner = sending.clone();
     ctx.reducers
-        .on_send_packet(move |ctx, _data: &Vec<u8>, _end| match &ctx.event.status {
+        .on_send_packet(move |ctx, _data: &Vec<u8>| match &ctx.event.status {
             Status::Committed => {
                 let Some(file) = &mut sending_inner.lock().unwrap().file else {
                     return;
@@ -720,11 +766,39 @@ fn download_file(payload: FileRefPayload, session: State<SessionState>) -> Optio
     session.lock().unwrap().download_file(payload, inner)
 }
 
+#[tauri::command]
+fn set_avatar(path: PathBuf, session: State<SessionState>) {
+    let Some(connection) = &session.lock().unwrap().connection else {
+        return;
+    };
+
+    println!("Avatar: {:?}", path);
+    if let Ok(data) = std::fs::read(path) {
+        connection
+            .reducers
+            .set_avatar(data)
+            .expect("Spacetime error");
+    }
+}
+
+#[tauri::command]
+fn join_voice_room(session: State<SessionState>, voice: State<VoiceHandlerState>) {
+    if session.lock().unwrap().connection.is_none() {
+        return;
+    };
+
+    let handler = &mut voice.lock().unwrap();
+
+    // todo: voice thread
+    handler.0 = Some(thread::spawn(|| {}));
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let mut builder = tauri::Builder::default()
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_dialog::init());
+    
     #[cfg(desktop)]
     {
         builder = builder.plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
@@ -741,13 +815,18 @@ pub fn run() {
         .setup(|app| {
             let handle = app.handle().clone();
             tauri::async_runtime::spawn(async move {
-                update(handle).await.unwrap();
+                let result = update(handle).await;
+                if let Err(e) = result {
+                    eprintln!("Update error: {}", e);
+                }
             });
             Ok(())
         })
         .plugin(tauri_plugin_opener::init())
         .manage(Arc::new(Mutex::new(ConnectionHandler::default())))
         .manage(Arc::new(Mutex::new(SendingFile::default())))
+        .manage(Arc::new(Mutex::new(VoiceStreamState::default())))
+        .manage(Arc::new(Mutex::new(VoiceHandler::default())))
         .invoke_handler(tauri::generate_handler![
             connect,
             disconnect,
@@ -761,7 +840,9 @@ pub fn run() {
             get_messages,
             get_users,
             file_path,
-            download_file
+            download_file,
+            set_avatar,
+            join_voice_room
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application");
@@ -770,11 +851,11 @@ pub fn run() {
         RunEvent::Ready => {
             // Setup session data
             handle.manage(Arc::new(Mutex::new(SessionInner::new(handle))));
-        }
+        },
         RunEvent::Exit => {
             let session = handle.state::<SessionState>();
             session.lock().unwrap().exit();
-        }
+        },
         _ => (),
     });
 }

@@ -8,14 +8,12 @@ use spacetimedb_sdk::__codegen::{self as __sdk, __lib, __sats, __ws};
 #[sats(crate = __lib)]
 pub(super) struct SendPacketArgs {
     pub pocket: Vec<u8>,
-    pub end: bool,
 }
 
 impl From<SendPacketArgs> for super::Reducer {
     fn from(args: SendPacketArgs) -> Self {
         Self::SendPacket {
             pocket: args.pocket,
-            end: args.end,
         }
     }
 }
@@ -36,7 +34,7 @@ pub trait send_packet {
     /// This method returns immediately, and errors only if we are unable to send the request.
     /// The reducer will run asynchronously in the future,
     ///  and its status can be observed by listening for [`Self::on_send_packet`] callbacks.
-    fn send_packet(&self, pocket: Vec<u8>, end: bool) -> __sdk::Result<()>;
+    fn send_packet(&self, pocket: Vec<u8>) -> __sdk::Result<()>;
     /// Register a callback to run whenever we are notified of an invocation of the reducer `send_packet`.
     ///
     /// Callbacks should inspect the [`__sdk::ReducerEvent`] contained in the [`super::ReducerEventContext`]
@@ -46,7 +44,7 @@ pub trait send_packet {
     /// to cancel the callback.
     fn on_send_packet(
         &self,
-        callback: impl FnMut(&super::ReducerEventContext, &Vec<u8>, &bool) + Send + 'static,
+        callback: impl FnMut(&super::ReducerEventContext, &Vec<u8>) + Send + 'static,
     ) -> SendPacketCallbackId;
     /// Cancel a callback previously registered by [`Self::on_send_packet`],
     /// causing it not to run in the future.
@@ -54,13 +52,13 @@ pub trait send_packet {
 }
 
 impl send_packet for super::RemoteReducers {
-    fn send_packet(&self, pocket: Vec<u8>, end: bool) -> __sdk::Result<()> {
+    fn send_packet(&self, pocket: Vec<u8>) -> __sdk::Result<()> {
         self.imp
-            .call_reducer("send_packet", SendPacketArgs { pocket, end })
+            .call_reducer("send_packet", SendPacketArgs { pocket })
     }
     fn on_send_packet(
         &self,
-        mut callback: impl FnMut(&super::ReducerEventContext, &Vec<u8>, &bool) + Send + 'static,
+        mut callback: impl FnMut(&super::ReducerEventContext, &Vec<u8>) + Send + 'static,
     ) -> SendPacketCallbackId {
         SendPacketCallbackId(self.imp.on_reducer(
             "send_packet",
@@ -68,7 +66,7 @@ impl send_packet for super::RemoteReducers {
                 let super::ReducerEventContext {
                     event:
                         __sdk::ReducerEvent {
-                            reducer: super::Reducer::SendPacket { pocket, end },
+                            reducer: super::Reducer::SendPacket { pocket },
                             ..
                         },
                     ..
@@ -76,7 +74,7 @@ impl send_packet for super::RemoteReducers {
                 else {
                     unreachable!()
                 };
-                callback(ctx, pocket, end)
+                callback(ctx, pocket)
             }),
         ))
     }

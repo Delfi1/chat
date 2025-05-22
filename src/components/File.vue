@@ -40,7 +40,7 @@ function onFileClick(event: MouseEvent) {
 </script>
 
 <template>
-  <div v-if="!props.downloading" class="file" @contextmenu="onFileClick">
+  <div v-if="!props.downloading" class="file" @click="onFileClick">
     <p class="filename" v-text="props.payload.name"></p>
     <p class="filesize" v-text="formatSize(props.payload.size)"></p>
   </div>

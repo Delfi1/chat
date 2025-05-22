@@ -1,6 +1,6 @@
 <script setup lang="ts">
   import { onBeforeMount, ref } from 'vue';
-  import { UserPayload, MessagePayload, sender, get_messsage, SendPayload } from './api';
+  import { UserPayload, MessagePayload, sender, getMesssage, messagesChunk, SendPayload, avatarName } from './api';
   import Message from './components/Message.vue';
   //import User from './components/User.vue';
   import { invoke } from '@tauri-apps/api/core';
@@ -12,9 +12,9 @@
   import { MenuItem } from "primevue/menuitem";
 
   const props = defineProps<{
-    self: UserPayload | undefined
-    users: UserPayload[],
-    messages: MessagePayload[]
+    self: UserPayload,
+    users: Map<number, UserPayload>,
+    messages: Map<number, MessagePayload>
   }>();
   const emit = defineEmits(['logout']);
 
@@ -31,9 +31,13 @@
 
   function attach() {
     open().then((path) => {
-      if (path) {
-        attached.value = path;
-      }
+      if (path) { attached.value = path };
+    })
+  }
+
+  function open_avatar() {
+    open().then((path) => {
+      if (path) { invoke("set_avatar", { "path": path }) };
     })
   }
 
@@ -92,6 +96,7 @@
 
 <template>
   <div class="container">
+    <ContextMenu ref="menu" :model="menu_items"/>
     <div class="left-menu">
       <div class="logo">
         <h1>De</h1>
@@ -118,11 +123,10 @@
     </div>
     
     <div class="central-box">
-      <ContextMenu ref="menu" :model="menu_items"/>
       <div v-if="page == Pages.chat" class="chat-page">
         <div class="chat-box">
           <div class="messages-box" id="messages-area">
-            <Message v-for="message in props.messages" :self="self" :user="sender(props.users, message)" :payload="message" :reply="get_messsage(props.messages, message.reply)" @open_menu="open_menu" @reply="reply" @edit="edit" @remove="remove"></Message>
+            <Message v-for="message in messagesChunk(props.messages)" :self="self" :user="sender(props.users, message)" :payload="message" :reply="getMesssage(props.messages, message.reply)" @open_menu="open_menu" @reply="reply" @edit="edit" @remove="remove"></Message>
           </div>
           <div id="input-box" class="input-box">
             <div class="send-data-box">
@@ -146,7 +150,14 @@
       </div>
 
       <div v-if="page == Pages.account" class="account-page">
-        <button @click="emit('logout')">Logout</button>
+        <div class="account-settings">
+          <h2 v-text="self.name"></h2>
+          <div class="avatar-selector" @click="open_avatar">
+            <img v-if="self?.avatar" class="avatar" width="55" height="55" :src="self?.avatar">
+            <h2 v-if="!self?.avatar" class="avatar text" v-text="avatarName(self)"></h2>
+          </div>
+          <button @click="emit('logout')">Logout</button>
+        </div>
       </div>
 
       <div v-if="page == Pages.settings" class="settings-page">
@@ -354,6 +365,7 @@
   margin-left: 15px;
   margin-top: 5px;
   padding-top: 10px;
+  padding-bottom: 2px;
   font-size: 16px;
 }
 
@@ -374,11 +386,50 @@
   right: 0;
 }
 
-.account-page button {
-  width: 60px;
-  height: 25px;
-  margin: 10px;
+.account-page {
   background-color: #202329;
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+.account-page .account-settings {
+  position: absolute;
+  width: 90%;
+  height: 90%;
+  margin: 30px;
+  padding: 10px;
+  line-height: 30px;
+  outline: thick double #2aaee2;
+}
+
+.avatar {
+  position: absolute;
+  outline: none;
+  border: none;
+  border-radius: 18px;
+  font-size: 22px;
+  width: 55px;
+  height: 55px;
+  z-index: 1;
+}
+
+.avatar.text {
+  text-align: center;
+  align-content: center;
+  background-color: black;
+  user-select: none;
+}
+
+.avatar-selector {
+  position: relative;
+  width: 65px;
+  margin-top: 10px;
+  height: 65px;
+}
+
+.account-page .button {
+  min-width: 20px;
 }
 
 </style>

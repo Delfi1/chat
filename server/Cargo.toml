@@ -1,6 +1,6 @@
 [package]
 name = "spacetime-module"
-version = "0.0.5"
+version = "0.0.6"
 edition = "2021"
 
 [lib]
@@ -8,5 +8,6 @@ crate-type = ["cdylib"]
 
 [dependencies]
 spacetimedb = "*"
+image = { version="*", default-features=false, features=["png", "jpeg"] }
 cpal = "0.15.*"
 log = "0.4"

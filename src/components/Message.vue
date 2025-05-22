@@ -1,6 +1,6 @@
 <script setup lang="ts">
   import { ref } from "vue";
-  import { FileRefPayload, MessagePayload, UserPayload } from '../api';
+  import { FileRefPayload, MessagePayload, UserPayload, avatarName } from '../api';
   import { marked } from 'marked';
   import File from './File.vue';
 
@@ -12,8 +12,8 @@
   import { listen } from "@tauri-apps/api/event";
 
   const props = defineProps<{
-    self: UserPayload | undefined,
-    user: UserPayload | undefined,
+    self: UserPayload,
+    user: UserPayload,
     reply: MessagePayload | undefined,
     payload: MessagePayload
   }>();
@@ -85,6 +85,7 @@
   function file_menu(event: MouseEvent, items: MenuItem[]) {
     emit("open_menu", event, items);
   }
+  const profileName = avatarName(props.user!);
 
   // time formatter
   function time(): string {
@@ -102,7 +103,7 @@
   }
 
   function is_owner(): boolean {
-    return props.user?.id == props.self?.id;
+    return props.user.id == props.self.id;
   }
 
   // Get reply from message
@@ -134,37 +135,44 @@
 </script>
 
 <template>
-  <div v-if="!is_owner()" class="message-container received" @contextmenu="onReceivedClick">
-    <div class="avatar"></div>
-    <div class="message">
+  <div v-if="!is_owner()" class="message-container received">
+    <div class="avatar-container">
+      <img v-if="user.avatar" class="avatar" width="55" height="55" :src="user.avatar">
+      <h2 v-if="!user.avatar" class="avatar text" v-text="profileName"></h2>
+    </div>
+    <div class="message" @contextmenu="onReceivedClick">
       <div v-if="props.reply" class="reply">Replying to: {{ get_reply() }}</div>
-      <p class="name" v-text="props.user?.name"></p>
+      <p class="name" v-text="props.user.name"></p>
       <div @click="on_click" v-html="marked(props.payload.text)" class="text"></div>
       <File v-if="payload.file" @open_menu="file_menu" :downloading="downloading" @download="download" @open="open" @reveal="reveal" :payload="payload.file"></File>
-      <div class="time" v-text="time()"></div>
+      <div class="time" v-text="time()"></div> 
     </div>
   </div>
   
-  <div v-if="is_owner()" class="message-container sent" @contextmenu="onSentClick">
-    <div class="message">
+  <div v-if="is_owner()" class="message-container sent">
+    <div class="message" @contextmenu="onSentClick">
       <div v-if="props.reply" class="reply">Replying to: {{ get_reply() }}</div>
-      <p class="name" v-text="props.user?.name"></p>
+      <p class="name" v-text="props.self.name"></p>
       <div v-if="!editing" @click="on_click" v-html="marked(props.payload.text)" class="text"></div>
       <textarea v-if="editing" v-model="edited_text" class="editor" v-on:keyup.enter.exact="update" v-on:keyup.escape.exact="cancel"></textarea>
       <File v-if="payload.file" @open_menu="file_menu" :downloading="downloading" @download="download" @open="open" @reveal="reveal" :payload="payload.file"></File>
       <div class="time" v-text="time()"></div>
     </div>
-    <div class="avatar"></div>
+    <div class="avatar-container">
+      <img v-if="self.avatar" class="avatar" width="55" height="55" :src="self.avatar">
+      <h2 v-if="!self.avatar" class="avatar text" v-text="profileName"></h2>
+    </div>
 </div>
 </template>
 
 <style>
 .message-container {
-  clear: both;
   width: 100%;
-  height: fit-content;
-  position: relative;
+  display: flex;
+  flex-direction: row;
   z-index: 1;
+  line-height: 18px;
+  font-size: 15px;
 }
 
 .message-container .message {
@@ -173,24 +181,46 @@
   overflow-wrap: anywhere;
   padding: 8px;
   margin: 8px 8px;
-  line-height: 18px;
   min-width: 80px;
-  font-size: 15px;
-  max-width: 60%;
-  float: left;
+  max-width: 85%;
+  height: 100%;
+  z-index: 1;
 }
 
-.message-container .name {
+.message-container .name, .message-container .time {
   user-select: none;
 }
 
-.message-container .time {
-  user-select: none;
+.avatar-container {
+  position: relative;
+  width: 57px;
+  height: auto; 
+  padding: 0;
+  z-index: 1;
+}
+
+.message-container.sent {
+  justify-content: flex-end;
+}
+
+.message-container.received .avatar-container {
+  margin-left: 15px;
+}
+
+.message-container.sent .avatar-container {
+  margin-right: 15px;
+}
+
+.message-container.sent .avatar {
+  bottom: 0px;
+}
+
+.message-container:first-child {
+  margin-top: 10px;
 }
 
 .message-container:last-child {
-  display: block;
-  padding-bottom: anchor-size(height);
+  margin-bottom: 10px;
 }
 
 .reply {
@@ -227,6 +257,7 @@
   margin-left: 16px;
   border-radius: 0px 5px 5px 5px;
   background-color: #2e343d;
+  float: left;
 }
 
 .received .message:after {
@@ -264,8 +295,8 @@
 }
 
 .message .editor {
-  width: 100%;
   padding: 5px;
+  width: 100px;
   height: 50px;
   resize: none;
   background-color: #7794ff;
