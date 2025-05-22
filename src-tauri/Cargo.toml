@@ -1,6 +1,6 @@
 [package]
 name = "chat"
-version = "0.0.5"
+version = "0.0.6"
 description = "Tauri and SpacetimeDB chat application"
 authors = ["Delfi"]
 edition = "2021"

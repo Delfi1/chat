@@ -3,7 +3,7 @@ interface UserPayload {
   name: string,
   // base64 string
   avatar: string | null,
-  id_admin: boolean,
+  is_admin: boolean,
   online: boolean
 }
 
@@ -29,8 +29,23 @@ interface SendPayload {
 }
 
 // Message sender
-function sender(users: Map<number, UserPayload>, message: MessagePayload): UserPayload | undefined {
-  return users.get(message.sender);
+function sender(users: Map<number, UserPayload>, message: MessagePayload): UserPayload {
+    let result = users.get(message.sender);
+
+    // If user is not exists
+    if (!result) {
+      let unknow: UserPayload = {
+        id: -1,
+        name: "-",
+        avatar: null,
+        is_admin: false,
+        online: false
+      };
+
+      return unknow
+    }
+
+    return result
 }
 
 function messagesChunk(messages: Map<number, MessagePayload>): MessagePayload[] {
@@ -42,7 +57,9 @@ function getMesssage(messages: Map<number, MessagePayload>, id: number | null): 
   return messages.get(id);
 }
 
-function avatarName(user: UserPayload): string {
+function avatarName(user: UserPayload | undefined): string | undefined {
+  if (!user) { return undefined };
+
   return user.name.substring(0, 2)
 }
 

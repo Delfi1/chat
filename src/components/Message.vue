@@ -13,7 +13,7 @@
 
   const props = defineProps<{
     self: UserPayload,
-    user: UserPayload | undefined,
+    user: UserPayload,
     reply: MessagePayload | undefined,
     payload: MessagePayload
   }>();
@@ -103,7 +103,7 @@
   }
 
   function is_owner(): boolean {
-    return props.user?.id == props.self?.id;
+    return props.user.id == props.self.id;
   }
 
   // Get reply from message
@@ -137,30 +137,30 @@
 <template>
   <div v-if="!is_owner()" class="message-container received">
     <div class="avatar-container">
-      <img v-if="user?.avatar" class="avatar" width="55" height="55" :src="user?.avatar">
-      <h2 v-if="!user?.avatar" class="avatar text" v-text="profileName"></h2>
+      <img v-if="user.avatar" class="avatar" width="55" height="55" :src="user.avatar">
+      <h2 v-if="!user.avatar" class="avatar text" v-text="profileName"></h2>
     </div>
     <div class="message" @contextmenu="onReceivedClick">
       <div v-if="props.reply" class="reply">Replying to: {{ get_reply() }}</div>
-      <p class="name" v-text="props.user?.name"></p>
+      <p class="name" v-text="props.user.name"></p>
       <div @click="on_click" v-html="marked(props.payload.text)" class="text"></div>
       <File v-if="payload.file" @open_menu="file_menu" :downloading="downloading" @download="download" @open="open" @reveal="reveal" :payload="payload.file"></File>
-      <div class="time" v-text="time()"></div>
+      <div class="time" v-text="time()"></div> 
     </div>
   </div>
   
   <div v-if="is_owner()" class="message-container sent">
     <div class="message" @contextmenu="onSentClick">
       <div v-if="props.reply" class="reply">Replying to: {{ get_reply() }}</div>
-      <p class="name" v-text="props.user?.name"></p>
+      <p class="name" v-text="props.self.name"></p>
       <div v-if="!editing" @click="on_click" v-html="marked(props.payload.text)" class="text"></div>
       <textarea v-if="editing" v-model="edited_text" class="editor" v-on:keyup.enter.exact="update" v-on:keyup.escape.exact="cancel"></textarea>
       <File v-if="payload.file" @open_menu="file_menu" :downloading="downloading" @download="download" @open="open" @reveal="reveal" :payload="payload.file"></File>
       <div class="time" v-text="time()"></div>
     </div>
     <div class="avatar-container">
-      <img v-if="user?.avatar" class="avatar" width="55" height="55" :src="user?.avatar">
-      <h2 v-if="!user?.avatar" class="avatar text" v-text="profileName"></h2>
+      <img v-if="self.avatar" class="avatar" width="55" height="55" :src="self.avatar">
+      <h2 v-if="!self.avatar" class="avatar text" v-text="profileName"></h2>
     </div>
 </div>
 </template>
@@ -182,7 +182,7 @@
   padding: 8px;
   margin: 8px 8px;
   min-width: 80px;
-  max-width: 70%;
+  max-width: 85%;
   height: 100%;
   z-index: 1;
 }
@@ -197,23 +197,6 @@
   height: auto; 
   padding: 0;
   z-index: 1;
-}
-
-.avatar {
-  position: absolute;
-  outline: none;
-  border: none;
-  border-radius: 18px;
-  font-size: 22px;
-  width: 55px;
-  height: 55px;
-  z-index: 1;
-}
-
-.avatar.text {
-  text-align: center;
-  align-content: center;
-  background-color: black;
 }
 
 .message-container.sent {

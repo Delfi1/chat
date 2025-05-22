@@ -47,13 +47,6 @@ function logout() {
   self.value = undefined;
 }
 
-function scroll_area() {
-  var area = document.getElementById("messages-area") as HTMLElement;
-  if (area.scrollTo) {
-    area.scrollTo(0, area.scrollHeight);
-  }
-}
-
 function main_state() {
   appWindow.setResizable(true);
   appWindow.setMaximizable(true);
@@ -122,16 +115,12 @@ onBeforeMount(() => {
     if (ev.payload) {
       messages.value.set(ev.payload.id, ev.payload);
     }
-    
-    scroll_area();
   });
 
   listen<MessagePayload>('message_updated', (ev) => {
     if (ev.payload) {
       messages.value.set(ev.payload.id, ev.payload);
     }
-
-    scroll_area();
   });
 
   // Loginned User is inserted
@@ -174,14 +163,6 @@ onBeforeMount(() => {
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Archivo:ital,wght@0,100..900;1,100..900&display=swap');
 
-/* Colors palette */
-/*
-#131313
-#2e333d
-#6b8afd
-#ffffff
-*/
-
 *, *:before, *:after{
   padding: 0;
   margin: 0;
@@ -196,7 +177,7 @@ onBeforeMount(() => {
 .main {
   width: 100%;
   height: 100%;
-  position: absolute;
+  position: fixed;
   background-color: #131313;
 }
 

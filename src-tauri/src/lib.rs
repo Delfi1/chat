@@ -1,4 +1,5 @@
 use std::{
+    thread,
     path::PathBuf,
     sync::{Arc, Mutex},
 };
@@ -205,7 +206,7 @@ type SendingFileState = Arc<Mutex<SendingFile>>;
 struct ConnectionHandler(Option<std::thread::JoinHandle<()>>);
 type ConnectionState = Arc<Mutex<ConnectionHandler>>;
 
-// Cpal voice stream controller
+// Cpal voice stream controller, todo
 pub struct VoiceStream {
     host: cpal::Host,
     input_device: cpal::Device,
@@ -767,7 +768,7 @@ fn download_file(payload: FileRefPayload, session: State<SessionState>) -> Optio
 
 #[tauri::command]
 fn set_avatar(path: PathBuf, session: State<SessionState>) {
-        let Some(connection) = &session.lock().unwrap().connection else {
+    let Some(connection) = &session.lock().unwrap().connection else {
         return;
     };
 
@@ -778,6 +779,18 @@ fn set_avatar(path: PathBuf, session: State<SessionState>) {
             .set_avatar(data)
             .expect("Spacetime error");
     }
+}
+
+#[tauri::command]
+fn join_voice_room(session: State<SessionState>, voice: State<VoiceHandlerState>) {
+    if session.lock().unwrap().connection.is_none() {
+        return;
+    };
+
+    let handler = &mut voice.lock().unwrap();
+
+    // todo: voice thread
+    handler.0 = Some(thread::spawn(|| {}));
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -802,7 +815,10 @@ pub fn run() {
         .setup(|app| {
             let handle = app.handle().clone();
             tauri::async_runtime::spawn(async move {
-                update(handle).await.unwrap();
+                let result = update(handle).await;
+                if let Err(e) = result {
+                    eprintln!("Update error: {}", e);
+                }
             });
             Ok(())
         })
@@ -825,7 +841,8 @@ pub fn run() {
             get_users,
             file_path,
             download_file,
-            set_avatar
+            set_avatar,
+            join_voice_room
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application");
@@ -834,11 +851,11 @@ pub fn run() {
         RunEvent::Ready => {
             // Setup session data
             handle.manage(Arc::new(Mutex::new(SessionInner::new(handle))));
-        }
+        },
         RunEvent::Exit => {
             let session = handle.state::<SessionState>();
             session.lock().unwrap().exit();
-        }
+        },
         _ => (),
     });
 }

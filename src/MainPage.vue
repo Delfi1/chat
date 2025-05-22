@@ -1,6 +1,6 @@
 <script setup lang="ts">
   import { onBeforeMount, ref } from 'vue';
-  import { UserPayload, MessagePayload, sender, getMesssage, messagesChunk, SendPayload } from './api';
+  import { UserPayload, MessagePayload, sender, getMesssage, messagesChunk, SendPayload, avatarName } from './api';
   import Message from './components/Message.vue';
   //import User from './components/User.vue';
   import { invoke } from '@tauri-apps/api/core';
@@ -151,7 +151,11 @@
 
       <div v-if="page == Pages.account" class="account-page">
         <div class="account-settings">
-          <button @click="open_avatar">Set avatar</button>
+          <h2 v-text="self.name"></h2>
+          <div class="avatar-selector" @click="open_avatar">
+            <img v-if="self?.avatar" class="avatar" width="55" height="55" :src="self?.avatar">
+            <h2 v-if="!self?.avatar" class="avatar text" v-text="avatarName(self)"></h2>
+          </div>
           <button @click="emit('logout')">Logout</button>
         </div>
       </div>
@@ -361,6 +365,7 @@
   margin-left: 15px;
   margin-top: 5px;
   padding-top: 10px;
+  padding-bottom: 2px;
   font-size: 16px;
 }
 
@@ -396,6 +401,35 @@
   padding: 10px;
   line-height: 30px;
   outline: thick double #2aaee2;
+}
+
+.avatar {
+  position: absolute;
+  outline: none;
+  border: none;
+  border-radius: 18px;
+  font-size: 22px;
+  width: 55px;
+  height: 55px;
+  z-index: 1;
+}
+
+.avatar.text {
+  text-align: center;
+  align-content: center;
+  background-color: black;
+  user-select: none;
+}
+
+.avatar-selector {
+  position: relative;
+  width: 65px;
+  margin-top: 10px;
+  height: 65px;
+}
+
+.account-page .button {
+  min-width: 20px;
 }
 
 </style>
